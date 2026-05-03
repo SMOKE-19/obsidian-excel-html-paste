@@ -222,12 +222,17 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     }
   }
 
-  private buildCodeBlock(metaPath: string): string {
-    return `\n\`\`\`${CODE_BLOCK}\npath: ${metaPath}\n\`\`\`\n`;
+  private buildCodeBlock(metaPath: string, updatedAt?: string): string {
+    return `\n${this.buildCodeBlockSection(metaPath, updatedAt)}\n`;
   }
 
-  private buildCodeBlockSection(metaPath: string): string {
-    return `\`\`\`${CODE_BLOCK}\npath: ${metaPath}\n\`\`\``;
+  private buildCodeBlockSection(metaPath: string, updatedAt?: string): string {
+    const lines = [`\`\`\`${CODE_BLOCK}`, `path: ${metaPath}`];
+    if (updatedAt) {
+      lines.push(`updatedAt: ${updatedAt}`);
+    }
+    lines.push("```");
+    return lines.join("\n");
   }
 
   private async renderExcelAsset(
@@ -281,7 +286,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
         const image = wrapper.createEl("img", {
           cls: "excel-html-image",
           attr: {
-            src: this.app.vault.getResourcePath(imageFile),
+            src: this.buildResourcePath(imageFile, meta.createdAt),
             alt: "Excel HTML paste preview"
           }
         });
@@ -357,8 +362,8 @@ export default class ExcelHtmlPastePlugin extends Plugin {
   ): Promise<void> {
     try {
       const payload = await this.readExcelClipboard();
-      await this.replaceAssetFilesInPlace(currentAsset, payload);
-      await this.replaceRenderedCodeBlock(el, ctx, this.buildCodeBlockSection(currentAsset.metaPath));
+      const updatedAt = await this.replaceAssetFilesInPlace(currentAsset, payload);
+      await this.replaceRenderedCodeBlock(el, ctx, this.buildCodeBlockSection(currentAsset.metaPath, updatedAt));
       new Notice("Excel asset을 새 클립보드 내용으로 교체하고 이전 파일을 이력으로 보관했습니다.");
     } catch (error) {
       this.reportError("Excel asset 교체에 실패했습니다.", error);
@@ -368,7 +373,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
   private async replaceAssetFilesInPlace(
     asset: RenderedAsset,
     payload: ClipboardExcelPayload
-  ): Promise<void> {
+  ): Promise<string> {
     if (!this.isManagedAssetPath(asset.basePath)) {
       throw new Error(`관리 대상 asset 경로가 아닙니다: ${asset.basePath}`);
     }
@@ -385,14 +390,16 @@ export default class ExcelHtmlPastePlugin extends Plugin {
         await this.app.vault.adapter.remove(activeImagePath);
       }
 
+      const updatedAt = new Date().toISOString();
       const meta: ExcelAssetMeta = {
         type: ASSET_TYPE,
         version: 1,
         image: payload.imageBuffer ? "table.png" : null,
         html: "table.html",
-        createdAt: new Date().toISOString()
+        createdAt: updatedAt
       };
       await this.app.vault.adapter.write(asset.metaPath, `${JSON.stringify(meta, null, 2)}\n`);
+      return updatedAt;
     } catch (error) {
       await this.rollbackInPlaceReplacement(asset, archivedFiles);
       throw error;
@@ -509,6 +516,12 @@ export default class ExcelHtmlPastePlugin extends Plugin {
 
   private isManagedAssetPath(path: string): boolean {
     return path.startsWith(`${ASSET_ROOT}/`) && !path.includes("..") && path.split("/").length >= 3;
+  }
+
+  private buildResourcePath(file: TFile, version: string): string {
+    const resourcePath = this.app.vault.getResourcePath(file);
+    const separator = resourcePath.includes("?") ? "&" : "?";
+    return `${resourcePath}${separator}v=${encodeURIComponent(version)}`;
   }
 
   private async nextHistoryPath(path: string): Promise<string> {
