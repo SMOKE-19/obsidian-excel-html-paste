@@ -1,0 +1,55 @@
+.excel-html-wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 0;
+}
+
+.excel-html-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+}
+
+.excel-html-copy-button {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 44px;
+  height: 26px;
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.68);
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.excel-html-copy-button:hover,
+.excel-html-copy-button:focus-visible {
+  background: rgba(0, 0, 0, 0.82);
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+
+.excel-html-fallback,
+.excel-html-error {
+  min-width: 220px;
+  max-width: 100%;
+  padding: 12px 64px 12px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.excel-html-error {
+  border-color: var(--text-error);
+  color: var(--text-error);
+}

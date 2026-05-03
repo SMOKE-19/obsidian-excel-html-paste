@@ -1,0 +1,10 @@
+{
+  "id": "excel-html-paste",
+  "name": "Excel HTML Paste",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Paste Excel clipboard tables as managed image and HTML assets.",
+  "author": "",
+  "authorUrl": "",
+  "isDesktopOnly": true
+}
