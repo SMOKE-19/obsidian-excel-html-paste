@@ -51,18 +51,10 @@ jobs:
           Copy-Item main.js "$packageDir\main.js"
           Copy-Item styles.css "$packageDir\styles.css"
           Copy-Item bin\excel-html-clipboard-win32-x64.exe "$packageDir\bin\excel-html-clipboard-win32-x64.exe"
-          Compress-Archive -Path "$packageDir\*" -DestinationPath "dist\excel-html-paste.zip" -Force
 
-      - name: Upload unpacked plugin
+      - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
         with:
           name: excel-html-paste-plugin
           path: dist/excel-html-paste
-          retention-days: 7
-
-      - name: Upload plugin zip
-        uses: actions/upload-artifact@v4
-        with:
-          name: excel-html-paste-plugin-zip
-          path: dist/excel-html-paste.zip
           retention-days: 7
