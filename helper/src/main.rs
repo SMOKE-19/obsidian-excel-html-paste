@@ -148,7 +148,7 @@ fn read_html() -> Result<String, String> {
         }
 
         let handle = GetClipboardData(format);
-        if handle == 0 {
+        if handle.is_null() {
             return Err("GetClipboardData failed".to_string());
         }
 
@@ -207,7 +207,7 @@ fn html_format() -> Result<u32, String> {
 #[cfg(windows)]
 unsafe fn set_clipboard_bytes(format: u32, bytes: &[u8]) -> Result<(), String> {
     let handle = GlobalAlloc(GMEM_MOVEABLE, bytes.len());
-    if handle == 0 {
+    if handle.is_null() {
         return Err("GlobalAlloc failed".to_string());
     }
 
@@ -219,7 +219,7 @@ unsafe fn set_clipboard_bytes(format: u32, bytes: &[u8]) -> Result<(), String> {
     copy_nonoverlapping(bytes.as_ptr(), ptr.cast::<u8>(), bytes.len());
     GlobalUnlock(handle);
 
-    if SetClipboardData(format, handle) == 0 {
+    if SetClipboardData(format, handle).is_null() {
         return Err("SetClipboardData failed".to_string());
     }
 
