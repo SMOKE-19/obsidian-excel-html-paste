@@ -1,6 +1,6 @@
 {
   "name": "obsidian-excel-html-paste",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Paste Excel HTML clipboard data into Obsidian as managed image/html assets.",
   "main": "main.js",
   "scripts": {
