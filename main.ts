@@ -1,6 +1,14 @@
 import { spawn } from "child_process";
 import { join } from "path";
-import { Editor, FileSystemAdapter, MarkdownPostProcessorContext, Menu, Notice, Plugin, TFile } from "obsidian";
+import {
+  Editor,
+  FileSystemAdapter,
+  MarkdownPostProcessorContext,
+  Menu,
+  Notice,
+  Plugin,
+  TFile
+} from "obsidian";
 
 const ASSET_ROOT = "assets/excel-paste";
 const CODE_BLOCK = "excel-html-asset";
@@ -16,6 +24,7 @@ interface ExcelAssetMeta {
   version: 1;
   image: string | null;
   html: string;
+  search?: string;
   createdAt: string;
 }
 
@@ -24,6 +33,7 @@ interface CreatedAsset {
   metaPath: string;
   htmlPath: string;
   imagePath: string | null;
+  searchPath: string;
 }
 
 interface RenderedAsset {
@@ -42,13 +52,14 @@ interface ArchivedAssetFile {
 export default class ExcelHtmlPastePlugin extends Plugin {
   async onload() {
     this.registerEvent(
-      this.app.workspace.on("editor-menu", (menu, editor) => {
+      this.app.workspace.on("editor-menu", (menu, editor, info) => {
         menu.addItem((item) => {
           item
             .setTitle("Excel 표(HTML) 붙여넣기")
             .setIcon("table")
             .onClick(async () => {
-              await this.handleExcelPaste(editor);
+              const sourcePath = info.file?.path ?? this.app.workspace.getActiveFile()?.path ?? null;
+              await this.handleExcelPaste(editor, sourcePath);
             });
         });
       })
@@ -62,7 +73,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     );
   }
 
-  private async handleExcelPaste(editor: Editor): Promise<void> {
+  private async handleExcelPaste(editor: Editor, sourcePath: string | null): Promise<void> {
     let payload: ClipboardExcelPayload;
 
     try {
@@ -77,7 +88,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     }
 
     try {
-      const asset = await this.createExcelAsset(payload);
+      const asset = await this.createExcelAsset(payload, sourcePath);
       editor.replaceSelection(this.buildCodeBlock(asset.metaPath));
       new Notice("Excel HTML asset을 삽입했습니다.");
     } catch (error) {
@@ -158,11 +169,15 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     }
   }
 
-  private async createExcelAsset(payload: ClipboardExcelPayload): Promise<CreatedAsset> {
+  private async createExcelAsset(
+    payload: ClipboardExcelPayload,
+    sourcePath: string | null
+  ): Promise<CreatedAsset> {
     const id = this.generateId();
     const basePath = `${ASSET_ROOT}/${id}`;
     const htmlPath = `${basePath}/table.html`;
     const imagePath = payload.imageBuffer ? `${basePath}/table.png` : null;
+    const searchPath = `${basePath}/table.search.md`;
     const metaPath = `${basePath}/meta.json`;
     const createdPaths: string[] = [];
 
@@ -177,11 +192,15 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       await this.app.vault.create(htmlPath, payload.html);
       createdPaths.push(htmlPath);
 
+      await this.app.vault.create(searchPath, this.htmlToSearchMarkdown(payload.html, sourcePath));
+      createdPaths.push(searchPath);
+
       const meta: ExcelAssetMeta = {
         type: ASSET_TYPE,
         version: 1,
         image: imagePath ? "table.png" : null,
         html: "table.html",
+        search: "table.search.md",
         createdAt: new Date().toISOString()
       };
 
@@ -192,7 +211,8 @@ export default class ExcelHtmlPastePlugin extends Plugin {
         basePath,
         metaPath,
         htmlPath,
-        imagePath
+        imagePath,
+        searchPath
       };
     } catch (error) {
       await this.rollbackCreatedFiles(createdPaths);
@@ -362,7 +382,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
   ): Promise<void> {
     try {
       const payload = await this.readExcelClipboard();
-      const updatedAt = await this.replaceAssetFilesInPlace(currentAsset, payload);
+      const updatedAt = await this.replaceAssetFilesInPlace(currentAsset, payload, ctx.sourcePath);
       await this.replaceRenderedCodeBlock(el, ctx, this.buildCodeBlockSection(currentAsset.metaPath, updatedAt));
       new Notice("Excel asset을 새 클립보드 내용으로 교체하고 이전 파일을 이력으로 보관했습니다.");
     } catch (error) {
@@ -372,7 +392,8 @@ export default class ExcelHtmlPastePlugin extends Plugin {
 
   private async replaceAssetFilesInPlace(
     asset: RenderedAsset,
-    payload: ClipboardExcelPayload
+    payload: ClipboardExcelPayload,
+    sourcePath: string | null
   ): Promise<string> {
     if (!this.isManagedAssetPath(asset.basePath)) {
       throw new Error(`관리 대상 asset 경로가 아닙니다: ${asset.basePath}`);
@@ -382,6 +403,10 @@ export default class ExcelHtmlPastePlugin extends Plugin {
 
     try {
       await this.app.vault.adapter.write(asset.htmlPath, payload.html);
+      await this.app.vault.adapter.write(
+        `${asset.basePath}/table.search.md`,
+        this.htmlToSearchMarkdown(payload.html, sourcePath)
+      );
 
       const activeImagePath = `${asset.basePath}/table.png`;
       if (payload.imageBuffer) {
@@ -396,6 +421,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
         version: 1,
         image: payload.imageBuffer ? "table.png" : null,
         html: "table.html",
+        search: "table.search.md",
         createdAt: updatedAt
       };
       await this.app.vault.adapter.write(asset.metaPath, `${JSON.stringify(meta, null, 2)}\n`);
@@ -411,6 +437,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     const candidates = [
       asset.htmlPath,
       `${asset.basePath}/table.png`,
+      `${asset.basePath}/table.search.md`,
       asset.metaPath
     ];
 
@@ -431,7 +458,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     asset: RenderedAsset,
     archivedFiles: ArchivedAssetFile[]
   ): Promise<void> {
-    for (const path of [asset.htmlPath, `${asset.basePath}/table.png`, asset.metaPath]) {
+    for (const path of [asset.htmlPath, `${asset.basePath}/table.png`, `${asset.basePath}/table.search.md`, asset.metaPath]) {
       if (await this.app.vault.adapter.exists(path)) {
         try {
           await this.app.vault.adapter.remove(path);
@@ -698,6 +725,64 @@ ${body}
     return html.slice(start, end);
   }
 
+  private htmlToSearchMarkdown(html: string, sourcePath: string | null): string {
+    const doc = new DOMParser().parseFromString(this.normalizeHtmlForClipboard(html), "text/html");
+    const lines = [
+      "# Excel HTML Paste Search Index",
+      "",
+      `Updated: ${new Date().toISOString()}`
+    ];
+
+    if (sourcePath) {
+      lines.push(`Source: ${this.sourcePathToWikilink(sourcePath)}`);
+    }
+
+    const tables = Array.from(doc.querySelectorAll("table"));
+    if (tables.length === 0) {
+      const text = this.normalizeCellText(doc.body.textContent ?? "");
+      lines.push("", "## Text", "", text || "(empty)");
+      return `${lines.join("\n")}\n`;
+    }
+
+    for (const [tableIndex, table] of tables.entries()) {
+      const rows = Array.from(table.querySelectorAll("tr"))
+        .map((row) =>
+          Array.from(row.querySelectorAll("th,td"))
+            .map((cell) => this.escapeMarkdownTableCell(this.normalizeCellText(cell.textContent ?? "")))
+        )
+        .filter((row) => row.some((cell) => cell.length > 0));
+
+      if (rows.length === 0) {
+        continue;
+      }
+
+      const columnCount = Math.max(...rows.map((row) => row.length));
+      const paddedRows = rows.map((row) => [...row, ...Array(Math.max(0, columnCount - row.length)).fill("")]);
+      const heading = tables.length === 1 ? "## Table" : `## Table ${tableIndex + 1}`;
+      const header = paddedRows[0];
+      const body = paddedRows.slice(1);
+
+      lines.push("", heading, "");
+      lines.push(`| ${header.join(" | ")} |`);
+      lines.push(`| ${Array(columnCount).fill("---").join(" | ")} |`);
+      for (const row of body) {
+        lines.push(`| ${row.join(" | ")} |`);
+      }
+    }
+
+    return `${lines.join("\n")}\n`;
+  }
+
+  private sourcePathToWikilink(sourcePath: string): string {
+    const linkPath = sourcePath.replace(/\.md$/i, "");
+    const label = linkPath.split("/").pop() ?? linkPath;
+    return `[[${linkPath}|${label}]]`;
+  }
+
+  private escapeMarkdownTableCell(text: string): string {
+    return text.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\n/g, " ");
+  }
+
   private htmlToPlainText(html: string): string {
     const doc = new DOMParser().parseFromString(html, "text/html");
     const table = doc.querySelector("table");
@@ -750,6 +835,10 @@ ${body}
 
     if (typeof meta.html !== "string" || !meta.html) {
       throw new Error("meta.html 값이 올바르지 않습니다.");
+    }
+
+    if (meta.search !== undefined && typeof meta.search !== "string") {
+      throw new Error("meta.search 값이 올바르지 않습니다.");
     }
 
     if (typeof meta.createdAt !== "string" || !meta.createdAt) {
