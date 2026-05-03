@@ -1,3 +1,4 @@
+import { spawn } from "child_process";
 import { Editor, MarkdownPostProcessorContext, Notice, Plugin, TFile } from "obsidian";
 
 const ASSET_ROOT = "assets/excel-paste";
@@ -268,12 +269,22 @@ export default class ExcelHtmlPastePlugin extends Plugin {
   }
 
   private async writeHtmlToClipboard(html: string): Promise<void> {
+    const normalizedHtml = this.normalizeHtmlForClipboard(html);
+    const plainText = this.htmlToPlainText(normalizedHtml);
+
+    if (this.isWindowsDesktop()) {
+      try {
+        await this.writeHtmlWithPythonNativeClipboard(normalizedHtml, plainText);
+        return;
+      } catch (error) {
+        console.warn("Python native clipboard helper failed; falling back to browser clipboard.", error);
+        new Notice("Windows native HTML 복사에 실패해 브라우저 클립보드 방식으로 재시도합니다.");
+      }
+    }
+
     if (!navigator.clipboard) {
       throw new Error("Clipboard API를 사용할 수 없습니다.");
     }
-
-    const normalizedHtml = this.normalizeHtmlForClipboard(html);
-    const plainText = this.htmlToPlainText(normalizedHtml);
 
     if (typeof navigator.clipboard.write === "function" && typeof ClipboardItem !== "undefined") {
       const item = new ClipboardItem({
@@ -291,6 +302,67 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     }
 
     throw new Error("Clipboard write API를 사용할 수 없습니다.");
+  }
+
+  private isWindowsDesktop(): boolean {
+    return typeof process !== "undefined" && process.platform === "win32";
+  }
+
+  private async writeHtmlWithPythonNativeClipboard(html: string, text: string): Promise<void> {
+    const payload = JSON.stringify({ html, text });
+    const errors: string[] = [];
+
+    for (const command of this.pythonCommands()) {
+      try {
+        await this.runPythonClipboardHelper(command.executable, command.args, payload);
+        return;
+      } catch (error) {
+        errors.push(`${command.executable}: ${this.errorMessage(error)}`);
+      }
+    }
+
+    throw new Error(errors.join(" | "));
+  }
+
+  private pythonCommands(): Array<{ executable: string; args: string[] }> {
+    return [
+      { executable: "python", args: ["-c", PYTHON_CF_HTML_HELPER] },
+      { executable: "py", args: ["-3", "-c", PYTHON_CF_HTML_HELPER] },
+      { executable: "python3", args: ["-c", PYTHON_CF_HTML_HELPER] }
+    ];
+  }
+
+  private runPythonClipboardHelper(executable: string, args: string[], input: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const child = spawn(executable, args, {
+        windowsHide: true,
+        stdio: ["pipe", "pipe", "pipe"]
+      });
+      const output: string[] = [];
+      const timer = window.setTimeout(() => {
+        child.kill();
+        reject(new Error("Python helper timed out."));
+      }, 10000);
+
+      child.stdout.on("data", (chunk: Buffer) => output.push(chunk.toString("utf8")));
+      child.stderr.on("data", (chunk: Buffer) => output.push(chunk.toString("utf8")));
+      child.on("error", (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      });
+      child.on("close", (code) => {
+        window.clearTimeout(timer);
+        if (code === 0) {
+          resolve();
+          return;
+        }
+
+        reject(new Error(output.join("").trim() || `Python helper exited with code ${code}.`));
+      });
+
+      child.stdin.write(input);
+      child.stdin.end();
+    });
   }
 
   private normalizeHtmlForClipboard(html: string): string {
@@ -436,3 +508,116 @@ ${body}
     return error instanceof Error ? error.message : String(error);
   }
 }
+
+const PYTHON_CF_HTML_HELPER = String.raw`
+import json
+import re
+import sys
+
+try:
+    import win32clipboard as wc
+except Exception as exc:
+    raise SystemExit(f"pywin32 is required: {exc}")
+
+
+START_MARKER = "<!--StartFragment-->"
+END_MARKER = "<!--EndFragment-->"
+
+
+def ensure_html_document(html: str) -> str:
+    if START_MARKER in html and END_MARKER in html:
+        return html
+
+    if re.search(r"<html[\s>]", html, re.I):
+        body_open = re.search(r"<body[^>]*>", html, re.I)
+        body_close = re.search(r"</body\s*>", html, re.I)
+        if body_open and body_close and body_open.end() <= body_close.start():
+            return (
+                html[: body_open.end()]
+                + START_MARKER
+                + html[body_open.end() : body_close.start()]
+                + END_MARKER
+                + html[body_close.start() :]
+            )
+        return START_MARKER + html + END_MARKER
+
+    return (
+        "<!DOCTYPE html>\r\n"
+        "<html>\r\n"
+        "<head><meta charset=\"utf-8\"></head>\r\n"
+        "<body>\r\n"
+        + START_MARKER
+        + html
+        + END_MARKER
+        + "\r\n</body>\r\n</html>"
+    )
+
+
+def build_cf_html(html: str) -> bytes:
+    html_doc = ensure_html_document(html)
+    start_marker_index = html_doc.index(START_MARKER) + len(START_MARKER)
+    end_marker_index = html_doc.index(END_MARKER)
+
+    header_template = (
+        "Version:0.9\r\n"
+        "StartHTML:{start_html:010d}\r\n"
+        "EndHTML:{end_html:010d}\r\n"
+        "StartFragment:{start_fragment:010d}\r\n"
+        "EndFragment:{end_fragment:010d}\r\n"
+    )
+    placeholder = header_template.format(
+        start_html=0,
+        end_html=0,
+        start_fragment=0,
+        end_fragment=0,
+    )
+    start_html = len(placeholder.encode("utf-8"))
+    before_fragment = html_doc[:start_marker_index].encode("utf-8")
+    fragment = html_doc[start_marker_index:end_marker_index].encode("utf-8")
+    html_bytes = html_doc.encode("utf-8")
+    start_fragment = start_html + len(before_fragment)
+    end_fragment = start_fragment + len(fragment)
+    end_html = start_html + len(html_bytes)
+    header = header_template.format(
+        start_html=start_html,
+        end_html=end_html,
+        start_fragment=start_fragment,
+        end_fragment=end_fragment,
+    )
+    return header.encode("utf-8") + html_bytes
+
+
+def encode_ansi(text: str) -> bytes:
+    for encoding in ("cp949", "mbcs", "utf-8"):
+        try:
+            return text.encode(encoding, errors="replace")
+        except Exception:
+            continue
+    return text.encode(errors="replace")
+
+
+def main() -> None:
+    payload = json.loads(sys.stdin.read())
+    html = payload["html"]
+    text = payload.get("text") or ""
+    raw_html = build_cf_html(html)
+    html_format = wc.RegisterClipboardFormat("HTML Format")
+
+    wc.OpenClipboard()
+    try:
+        wc.EmptyClipboard()
+        wc.SetClipboardData(wc.CF_UNICODETEXT, text)
+        ansi_text = encode_ansi(text)
+        wc.SetClipboardData(wc.CF_TEXT, ansi_text)
+        try:
+            wc.SetClipboardData(wc.CF_OEMTEXT, ansi_text)
+        except Exception:
+            pass
+        wc.SetClipboardData(html_format, raw_html)
+    finally:
+        wc.CloseClipboard()
+
+
+if __name__ == "__main__":
+    main()
+`;
