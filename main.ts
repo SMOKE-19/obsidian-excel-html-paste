@@ -96,18 +96,22 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       }
     }
 
-    if (!htmlBlob) {
+    const nativeHtml = await this.tryReadHtmlWithPythonNativeClipboard();
+
+    if (!htmlBlob && !nativeHtml) {
       throw new Error("클립보드에 text/html 데이터가 없습니다.");
     }
 
-    let html: string;
-    try {
-      html = await htmlBlob.text();
-    } catch (error) {
-      throw new Error(`HTML Blob을 텍스트로 변환하지 못했습니다: ${this.errorMessage(error)}`);
+    let html: string | null = nativeHtml;
+    if (!html && htmlBlob) {
+      try {
+        html = await htmlBlob.text();
+      } catch (error) {
+        throw new Error(`HTML Blob을 텍스트로 변환하지 못했습니다: ${this.errorMessage(error)}`);
+      }
     }
 
-    if (!html.trim()) {
+    if (!html?.trim()) {
       throw new Error("클립보드 HTML 데이터가 비어 있습니다.");
     }
 
@@ -117,6 +121,24 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       html,
       imageBuffer
     };
+  }
+
+  private async tryReadHtmlWithPythonNativeClipboard(): Promise<string | null> {
+    if (!this.isWindowsDesktop()) {
+      return null;
+    }
+
+    const errors: string[] = [];
+    for (const command of this.pythonCommands(PYTHON_READ_CF_HTML_HELPER)) {
+      try {
+        return await this.runPythonHelper(command.executable, command.args, "");
+      } catch (error) {
+        errors.push(`${command.executable}: ${this.errorMessage(error)}`);
+      }
+    }
+
+    console.warn("Python native clipboard read failed; falling back to browser clipboard.", errors.join(" | "));
+    return null;
   }
 
   private async createExcelAsset(payload: ClipboardExcelPayload): Promise<CreatedAsset> {
@@ -312,9 +334,9 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     const payload = JSON.stringify({ html, text });
     const errors: string[] = [];
 
-    for (const command of this.pythonCommands()) {
+    for (const command of this.pythonCommands(PYTHON_WRITE_CF_HTML_HELPER)) {
       try {
-        await this.runPythonClipboardHelper(command.executable, command.args, payload);
+        await this.runPythonHelper(command.executable, command.args, payload);
         return;
       } catch (error) {
         errors.push(`${command.executable}: ${this.errorMessage(error)}`);
@@ -324,28 +346,29 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     throw new Error(errors.join(" | "));
   }
 
-  private pythonCommands(): Array<{ executable: string; args: string[] }> {
+  private pythonCommands(script: string): Array<{ executable: string; args: string[] }> {
     return [
-      { executable: "python", args: ["-c", PYTHON_CF_HTML_HELPER] },
-      { executable: "py", args: ["-3", "-c", PYTHON_CF_HTML_HELPER] },
-      { executable: "python3", args: ["-c", PYTHON_CF_HTML_HELPER] }
+      { executable: "python", args: ["-c", script] },
+      { executable: "py", args: ["-3", "-c", script] },
+      { executable: "python3", args: ["-c", script] }
     ];
   }
 
-  private runPythonClipboardHelper(executable: string, args: string[], input: string): Promise<void> {
+  private runPythonHelper(executable: string, args: string[], input: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const child = spawn(executable, args, {
         windowsHide: true,
         stdio: ["pipe", "pipe", "pipe"]
       });
-      const output: string[] = [];
+      const stdout: string[] = [];
+      const stderr: string[] = [];
       const timer = window.setTimeout(() => {
         child.kill();
         reject(new Error("Python helper timed out."));
       }, 10000);
 
-      child.stdout.on("data", (chunk: Buffer) => output.push(chunk.toString("utf8")));
-      child.stderr.on("data", (chunk: Buffer) => output.push(chunk.toString("utf8")));
+      child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk.toString("utf8")));
+      child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk.toString("utf8")));
       child.on("error", (error) => {
         window.clearTimeout(timer);
         reject(error);
@@ -353,11 +376,11 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       child.on("close", (code) => {
         window.clearTimeout(timer);
         if (code === 0) {
-          resolve();
+          resolve(stdout.join(""));
           return;
         }
 
-        reject(new Error(output.join("").trim() || `Python helper exited with code ${code}.`));
+        reject(new Error(stderr.join("").trim() || stdout.join("").trim() || `Python helper exited with code ${code}.`));
       });
 
       child.stdin.write(input);
@@ -366,8 +389,12 @@ export default class ExcelHtmlPastePlugin extends Plugin {
   }
 
   private normalizeHtmlForClipboard(html: string): string {
-    const fragment = this.extractCfHtmlFragment(html);
-    const body = fragment ?? html;
+    const cfHtml = this.extractCfHtmlDocument(html);
+    if (cfHtml) {
+      return cfHtml;
+    }
+
+    const body = html;
 
     if (/<html[\s>]/i.test(body)) {
       return body;
@@ -384,14 +411,9 @@ ${body}
 </html>`;
   }
 
-  private extractCfHtmlFragment(html: string): string | null {
+  private extractCfHtmlDocument(html: string): string | null {
     if (!/^Version:/i.test(html.trimStart())) {
       return null;
-    }
-
-    const fragmentMatch = html.match(/<!--StartFragment-->([\s\S]*?)<!--EndFragment-->/i);
-    if (fragmentMatch) {
-      return fragmentMatch[1];
     }
 
     const startMatch = html.match(/StartHTML:(\d+)/i);
@@ -509,7 +531,48 @@ ${body}
   }
 }
 
-const PYTHON_CF_HTML_HELPER = String.raw`
+const PYTHON_READ_CF_HTML_HELPER = String.raw`
+import sys
+
+try:
+    import win32clipboard as wc
+except Exception as exc:
+    raise SystemExit(f"pywin32 is required: {exc}")
+
+
+def decode_html_data(data) -> str:
+    if isinstance(data, str):
+        return data
+
+    if isinstance(data, bytes):
+        for encoding in ("utf-8", "cp949", "mbcs"):
+            try:
+                return data.decode(encoding)
+            except Exception:
+                continue
+        return data.decode("utf-8", errors="replace")
+
+    return str(data)
+
+
+def main() -> None:
+    html_format = wc.RegisterClipboardFormat("HTML Format")
+    wc.OpenClipboard()
+    try:
+        if not wc.IsClipboardFormatAvailable(html_format):
+            raise SystemExit("HTML Format is not available.")
+        data = wc.GetClipboardData(html_format)
+    finally:
+        wc.CloseClipboard()
+
+    sys.stdout.write(decode_html_data(data))
+
+
+if __name__ == "__main__":
+    main()
+`;
+
+const PYTHON_WRITE_CF_HTML_HELPER = String.raw`
 import json
 import re
 import sys
