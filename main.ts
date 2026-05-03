@@ -49,6 +49,8 @@ interface ArchivedAssetFile {
   archivedPath: string;
 }
 
+type ReplacementMode = "archive" | "overwrite";
+
 export default class ExcelHtmlPastePlugin extends Plugin {
   async onload() {
     this.registerEvent(
@@ -357,10 +359,18 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       const menu = new Menu();
       menu.addItem((item) => {
         item
-          .setTitle("Excel 표(HTML)로 교체")
+          .setTitle("이력 남기고 Excel 표(HTML) 교체")
           .setIcon("replace")
           .onClick(async () => {
-            await this.replaceRenderedAsset(processorEl, ctx, asset);
+            await this.replaceRenderedAsset(processorEl, ctx, asset, "archive");
+          });
+      });
+      menu.addItem((item) => {
+        item
+          .setTitle("Excel 표(HTML) 완전 교체")
+          .setIcon("refresh-cw")
+          .onClick(async () => {
+            await this.replaceRenderedAsset(processorEl, ctx, asset, "overwrite");
           });
       });
       menu.addItem((item) => {
@@ -378,13 +388,17 @@ export default class ExcelHtmlPastePlugin extends Plugin {
   private async replaceRenderedAsset(
     el: HTMLElement,
     ctx: MarkdownPostProcessorContext,
-    currentAsset: RenderedAsset
+    currentAsset: RenderedAsset,
+    mode: ReplacementMode
   ): Promise<void> {
     try {
       const payload = await this.readExcelClipboard();
-      const updatedAt = await this.replaceAssetFilesInPlace(currentAsset, payload, ctx.sourcePath);
+      const updatedAt = await this.replaceAssetFilesInPlace(currentAsset, payload, ctx.sourcePath, mode);
       await this.replaceRenderedCodeBlock(el, ctx, this.buildCodeBlockSection(currentAsset.metaPath, updatedAt));
-      new Notice("Excel asset을 새 클립보드 내용으로 교체하고 이전 파일을 이력으로 보관했습니다.");
+      const message = mode === "archive"
+        ? "Excel asset을 새 클립보드 내용으로 교체하고 이전 파일을 이력으로 보관했습니다."
+        : "Excel asset을 새 클립보드 내용으로 완전 교체했습니다.";
+      new Notice(message);
     } catch (error) {
       this.reportError("Excel asset 교체에 실패했습니다.", error);
     }
@@ -393,15 +407,21 @@ export default class ExcelHtmlPastePlugin extends Plugin {
   private async replaceAssetFilesInPlace(
     asset: RenderedAsset,
     payload: ClipboardExcelPayload,
-    sourcePath: string | null
+    sourcePath: string | null,
+    mode: ReplacementMode
   ): Promise<string> {
     if (!this.isManagedAssetPath(asset.basePath)) {
       throw new Error(`관리 대상 asset 경로가 아닙니다: ${asset.basePath}`);
     }
 
-    const archivedFiles = await this.archiveActiveAssetFiles(asset);
+    const archivedFiles = mode === "archive" ? await this.archiveActiveAssetFiles(asset) : [];
+    let snapshot: Map<string, string | ArrayBuffer | null> | null = null;
 
     try {
+      if (mode === "overwrite") {
+        snapshot = await this.snapshotActiveAssetFiles(asset);
+      }
+
       await this.app.vault.adapter.write(asset.htmlPath, payload.html);
       await this.app.vault.adapter.write(
         `${asset.basePath}/table.search.md`,
@@ -425,11 +445,43 @@ export default class ExcelHtmlPastePlugin extends Plugin {
         createdAt: updatedAt
       };
       await this.app.vault.adapter.write(asset.metaPath, `${JSON.stringify(meta, null, 2)}\n`);
+      if (mode === "overwrite") {
+        await this.deleteAssetHistoryFiles(asset.basePath);
+      }
       return updatedAt;
     } catch (error) {
-      await this.rollbackInPlaceReplacement(asset, archivedFiles);
+      if (mode === "archive") {
+        await this.rollbackInPlaceReplacement(asset, archivedFiles);
+      } else if (snapshot) {
+        await this.rollbackOverwriteReplacement(asset, snapshot);
+      }
       throw error;
     }
+  }
+
+  private async snapshotActiveAssetFiles(asset: RenderedAsset): Promise<Map<string, string | ArrayBuffer | null>> {
+    const snapshot = new Map<string, string | ArrayBuffer | null>();
+    const paths = [
+      asset.htmlPath,
+      `${asset.basePath}/table.png`,
+      `${asset.basePath}/table.search.md`,
+      asset.metaPath
+    ];
+
+    for (const path of paths) {
+      if (!(await this.app.vault.adapter.exists(path))) {
+        snapshot.set(path, null);
+        continue;
+      }
+
+      if (path.endsWith(".png")) {
+        snapshot.set(path, await this.app.vault.adapter.readBinary(path));
+      } else {
+        snapshot.set(path, await this.app.vault.adapter.read(path));
+      }
+    }
+
+    return snapshot;
   }
 
   private async archiveActiveAssetFiles(asset: RenderedAsset): Promise<ArchivedAssetFile[]> {
@@ -452,6 +504,25 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     }
 
     return archivedFiles;
+  }
+
+  private async deleteAssetHistoryFiles(basePath: string): Promise<void> {
+    if (!this.isManagedAssetPath(basePath)) {
+      throw new Error(`관리 대상 asset 경로가 아닙니다: ${basePath}`);
+    }
+
+    if (!(await this.app.vault.adapter.exists(basePath))) {
+      return;
+    }
+
+    const listed = await this.app.vault.adapter.list(basePath);
+    const historyPattern = /\/(?:table-\d{8}-\d{6}(?:-\d+)?\.(?:html|png)|table\.search-\d{8}-\d{6}(?:-\d+)?\.md|meta-\d{8}-\d{6}(?:-\d+)?\.json)$/;
+
+    for (const path of listed.files) {
+      if (historyPattern.test(path)) {
+        await this.app.vault.adapter.remove(path);
+      }
+    }
   }
 
   private async rollbackInPlaceReplacement(
@@ -478,6 +549,31 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       } catch (error) {
         console.error(`Failed to restore archived asset file: ${file.archivedPath}`, error);
       }
+    }
+  }
+
+  private async rollbackOverwriteReplacement(
+    asset: RenderedAsset,
+    snapshot: Map<string, string | ArrayBuffer | null>
+  ): Promise<void> {
+    for (const [path, data] of snapshot.entries()) {
+      try {
+        if (data === null) {
+          if (await this.app.vault.adapter.exists(path)) {
+            await this.app.vault.adapter.remove(path);
+          }
+        } else if (data instanceof ArrayBuffer) {
+          await this.app.vault.adapter.writeBinary(path, data);
+        } else {
+          await this.app.vault.adapter.write(path, data);
+        }
+      } catch (error) {
+        console.error(`Failed to rollback overwritten asset file: ${path}`, error);
+      }
+    }
+
+    if (!(await this.app.vault.adapter.exists(asset.basePath))) {
+      await this.app.vault.adapter.mkdir(asset.basePath);
     }
   }
 
