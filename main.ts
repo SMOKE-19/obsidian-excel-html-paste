@@ -1,6 +1,6 @@
 import { spawn } from "child_process";
 import { join } from "path";
-import { Editor, FileSystemAdapter, MarkdownPostProcessorContext, Notice, Plugin, TFile } from "obsidian";
+import { Editor, FileSystemAdapter, MarkdownPostProcessorContext, Menu, Notice, Plugin, TFile } from "obsidian";
 
 const ASSET_ROOT = "assets/excel-paste";
 const CODE_BLOCK = "excel-html-asset";
@@ -24,6 +24,14 @@ interface CreatedAsset {
   metaPath: string;
   htmlPath: string;
   imagePath: string | null;
+}
+
+interface RenderedAsset {
+  basePath: string;
+  metaPath: string;
+  htmlPath: string;
+  imagePath: string | null;
+  meta: ExcelAssetMeta;
 }
 
 export default class ExcelHtmlPastePlugin extends Plugin {
@@ -213,10 +221,14 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     return `\n\`\`\`${CODE_BLOCK}\npath: ${metaPath}\n\`\`\`\n`;
   }
 
+  private buildCodeBlockSection(metaPath: string): string {
+    return `\`\`\`${CODE_BLOCK}\npath: ${metaPath}\n\`\`\``;
+  }
+
   private async renderExcelAsset(
     source: string,
     el: HTMLElement,
-    _ctx: MarkdownPostProcessorContext
+    ctx: MarkdownPostProcessorContext
   ): Promise<void> {
     const metaPath = this.parseMetaPath(source);
     if (!metaPath) {
@@ -246,7 +258,15 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       return;
     }
 
+    const asset: RenderedAsset = {
+      basePath,
+      metaPath,
+      htmlPath,
+      imagePath: meta.image ? `${basePath}/${meta.image}` : null,
+      meta
+    };
     const wrapper = el.createDiv({ cls: "excel-html-wrapper" });
+    this.registerAssetContextMenu(wrapper, el, ctx, asset);
 
     if (meta.image) {
       const imagePath = `${basePath}/${meta.image}`;
@@ -292,6 +312,130 @@ export default class ExcelHtmlPastePlugin extends Plugin {
         this.reportError("HTML 원본 복사에 실패했습니다.", error);
       }
     });
+  }
+
+  private registerAssetContextMenu(
+    wrapper: HTMLElement,
+    processorEl: HTMLElement,
+    ctx: MarkdownPostProcessorContext,
+    asset: RenderedAsset
+  ): void {
+    this.registerDomEvent(wrapper, "contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const menu = new Menu();
+      menu.addItem((item) => {
+        item
+          .setTitle("Excel 표(HTML)로 교체")
+          .setIcon("replace")
+          .onClick(async () => {
+            await this.replaceRenderedAsset(processorEl, ctx, asset);
+          });
+      });
+      menu.addItem((item) => {
+        item
+          .setTitle("Excel asset 삭제")
+          .setIcon("trash")
+          .onClick(async () => {
+            await this.deleteRenderedAsset(processorEl, ctx, asset);
+          });
+      });
+      menu.showAtMouseEvent(event);
+    });
+  }
+
+  private async replaceRenderedAsset(
+    el: HTMLElement,
+    ctx: MarkdownPostProcessorContext,
+    currentAsset: RenderedAsset
+  ): Promise<void> {
+    let newAsset: CreatedAsset | null = null;
+
+    try {
+      const payload = await this.readExcelClipboard();
+      newAsset = await this.createExcelAsset(payload);
+      await this.replaceRenderedCodeBlock(el, ctx, this.buildCodeBlockSection(newAsset.metaPath));
+      new Notice("Excel asset을 새 클립보드 내용으로 교체했습니다.");
+    } catch (error) {
+      if (newAsset) {
+        await this.deleteAssetFolder(newAsset.basePath);
+      }
+      this.reportError("Excel asset 교체에 실패했습니다.", error);
+      return;
+    }
+
+    if (newAsset && currentAsset.basePath !== newAsset.basePath) {
+      try {
+        await this.deleteAssetFolder(currentAsset.basePath);
+      } catch (error) {
+        this.reportError("기존 asset 폴더 자동 삭제에 실패했습니다.", error);
+      }
+    }
+  }
+
+  private async deleteRenderedAsset(
+    el: HTMLElement,
+    ctx: MarkdownPostProcessorContext,
+    asset: RenderedAsset
+  ): Promise<void> {
+    if (!window.confirm("이 Excel asset 블록과 연결된 asset 폴더를 삭제할까요?")) {
+      return;
+    }
+
+    try {
+      await this.replaceRenderedCodeBlock(el, ctx, "");
+    } catch (error) {
+      this.reportError("문서에서 Excel asset 블록을 제거하지 못했습니다.", error);
+      return;
+    }
+
+    try {
+      await this.deleteAssetFolder(asset.basePath);
+      new Notice("Excel asset을 삭제했습니다.");
+    } catch (error) {
+      this.reportError("asset 폴더 삭제에 실패했습니다. 문서 블록은 제거되었습니다.", error);
+    }
+  }
+
+  private async replaceRenderedCodeBlock(
+    el: HTMLElement,
+    ctx: MarkdownPostProcessorContext,
+    replacement: string
+  ): Promise<void> {
+    const sourceFile = this.getFile(ctx.sourcePath);
+    if (!sourceFile) {
+      throw new Error(`현재 문서를 찾을 수 없습니다: ${ctx.sourcePath}`);
+    }
+
+    const section = ctx.getSectionInfo(el);
+    if (!section) {
+      throw new Error("렌더된 asset의 문서 위치를 찾지 못했습니다. 읽기 화면을 새로고침한 뒤 다시 시도하세요.");
+    }
+
+    const content = await this.app.vault.read(sourceFile);
+    const newline = content.includes("\r\n") ? "\r\n" : "\n";
+    const lines = content.split(/\r?\n/);
+    const replacementLines = replacement ? replacement.split("\n") : [];
+
+    lines.splice(section.lineStart, section.lineEnd - section.lineStart + 1, ...replacementLines);
+    await this.app.vault.modify(sourceFile, lines.join(newline));
+  }
+
+  private async deleteAssetFolder(basePath: string): Promise<void> {
+    if (!this.isManagedAssetPath(basePath)) {
+      throw new Error(`관리 대상 asset 경로가 아닙니다: ${basePath}`);
+    }
+
+    if (!(await this.app.vault.adapter.exists(basePath))) {
+      return;
+    }
+
+    await this.app.vault.adapter.rmdir(basePath, true);
+  }
+
+  private isManagedAssetPath(path: string): boolean {
+    return path.startsWith(`${ASSET_ROOT}/`) && !path.includes("..") && path.split("/").length >= 3;
   }
 
   private async writeHtmlToClipboard(html: string): Promise<void> {
