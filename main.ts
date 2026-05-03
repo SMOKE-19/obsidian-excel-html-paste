@@ -34,6 +34,11 @@ interface RenderedAsset {
   meta: ExcelAssetMeta;
 }
 
+interface ArchivedAssetFile {
+  originalPath: string;
+  archivedPath: string;
+}
+
 export default class ExcelHtmlPastePlugin extends Plugin {
   async onload() {
     this.registerEvent(
@@ -350,26 +355,94 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     ctx: MarkdownPostProcessorContext,
     currentAsset: RenderedAsset
   ): Promise<void> {
-    let newAsset: CreatedAsset | null = null;
-
     try {
       const payload = await this.readExcelClipboard();
-      newAsset = await this.createExcelAsset(payload);
-      await this.replaceRenderedCodeBlock(el, ctx, this.buildCodeBlockSection(newAsset.metaPath));
-      new Notice("Excel asset을 새 클립보드 내용으로 교체했습니다.");
+      await this.replaceAssetFilesInPlace(currentAsset, payload);
+      await this.replaceRenderedCodeBlock(el, ctx, this.buildCodeBlockSection(currentAsset.metaPath));
+      new Notice("Excel asset을 새 클립보드 내용으로 교체하고 이전 파일을 이력으로 보관했습니다.");
     } catch (error) {
-      if (newAsset) {
-        await this.deleteAssetFolder(newAsset.basePath);
-      }
       this.reportError("Excel asset 교체에 실패했습니다.", error);
-      return;
+    }
+  }
+
+  private async replaceAssetFilesInPlace(
+    asset: RenderedAsset,
+    payload: ClipboardExcelPayload
+  ): Promise<void> {
+    if (!this.isManagedAssetPath(asset.basePath)) {
+      throw new Error(`관리 대상 asset 경로가 아닙니다: ${asset.basePath}`);
     }
 
-    if (newAsset && currentAsset.basePath !== newAsset.basePath) {
+    const archivedFiles = await this.archiveActiveAssetFiles(asset);
+
+    try {
+      await this.app.vault.adapter.write(asset.htmlPath, payload.html);
+
+      const activeImagePath = `${asset.basePath}/table.png`;
+      if (payload.imageBuffer) {
+        await this.app.vault.adapter.writeBinary(activeImagePath, payload.imageBuffer);
+      } else if (await this.app.vault.adapter.exists(activeImagePath)) {
+        await this.app.vault.adapter.remove(activeImagePath);
+      }
+
+      const meta: ExcelAssetMeta = {
+        type: ASSET_TYPE,
+        version: 1,
+        image: payload.imageBuffer ? "table.png" : null,
+        html: "table.html",
+        createdAt: new Date().toISOString()
+      };
+      await this.app.vault.adapter.write(asset.metaPath, `${JSON.stringify(meta, null, 2)}\n`);
+    } catch (error) {
+      await this.rollbackInPlaceReplacement(asset, archivedFiles);
+      throw error;
+    }
+  }
+
+  private async archiveActiveAssetFiles(asset: RenderedAsset): Promise<ArchivedAssetFile[]> {
+    const archivedFiles: ArchivedAssetFile[] = [];
+    const candidates = [
+      asset.htmlPath,
+      `${asset.basePath}/table.png`,
+      asset.metaPath
+    ];
+
+    for (const originalPath of Array.from(new Set(candidates))) {
+      if (!(await this.app.vault.adapter.exists(originalPath))) {
+        continue;
+      }
+
+      const archivedPath = await this.nextHistoryPath(originalPath);
+      await this.app.vault.adapter.rename(originalPath, archivedPath);
+      archivedFiles.push({ originalPath, archivedPath });
+    }
+
+    return archivedFiles;
+  }
+
+  private async rollbackInPlaceReplacement(
+    asset: RenderedAsset,
+    archivedFiles: ArchivedAssetFile[]
+  ): Promise<void> {
+    for (const path of [asset.htmlPath, `${asset.basePath}/table.png`, asset.metaPath]) {
+      if (await this.app.vault.adapter.exists(path)) {
+        try {
+          await this.app.vault.adapter.remove(path);
+        } catch (error) {
+          console.error(`Failed to remove partial replacement file: ${path}`, error);
+        }
+      }
+    }
+
+    for (const file of [...archivedFiles].reverse()) {
+      if (!(await this.app.vault.adapter.exists(file.archivedPath))) {
+        continue;
+      }
+
       try {
-        await this.deleteAssetFolder(currentAsset.basePath);
+        await this.app.vault.adapter.rename(file.archivedPath, file.originalPath);
       } catch (error) {
-        this.reportError("기존 asset 폴더 자동 삭제에 실패했습니다.", error);
+        console.error(`Failed to restore archived asset file: ${file.archivedPath}`, error);
       }
     }
   }
@@ -436,6 +509,39 @@ export default class ExcelHtmlPastePlugin extends Plugin {
 
   private isManagedAssetPath(path: string): boolean {
     return path.startsWith(`${ASSET_ROOT}/`) && !path.includes("..") && path.split("/").length >= 3;
+  }
+
+  private async nextHistoryPath(path: string): Promise<string> {
+    const suffix = this.generateHistorySuffix();
+    const extensionIndex = path.lastIndexOf(".");
+    const stem = extensionIndex >= 0 ? path.slice(0, extensionIndex) : path;
+    const extension = extensionIndex >= 0 ? path.slice(extensionIndex) : "";
+
+    for (let index = 0; index < 100; index += 1) {
+      const extra = index === 0 ? "" : `-${index}`;
+      const candidate = `${stem}-${suffix}${extra}${extension}`;
+      if (!(await this.app.vault.adapter.exists(candidate))) {
+        return candidate;
+      }
+    }
+
+    throw new Error(`이력 파일명을 만들 수 없습니다: ${path}`);
+  }
+
+  private generateHistorySuffix(): string {
+    const now = new Date();
+    const date = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0")
+    ].join("");
+    const time = [
+      String(now.getHours()).padStart(2, "0"),
+      String(now.getMinutes()).padStart(2, "0"),
+      String(now.getSeconds()).padStart(2, "0")
+    ].join("");
+
+    return `${date}-${time}`;
   }
 
   private async writeHtmlToClipboard(html: string): Promise<void> {
