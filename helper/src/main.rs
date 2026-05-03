@@ -9,7 +9,7 @@ use std::ptr::{copy_nonoverlapping, null_mut};
 #[cfg(windows)]
 use windows_sys::Win32::System::DataExchange::{
     CloseClipboard, EmptyClipboard, GetClipboardData, IsClipboardFormatAvailable, OpenClipboard,
-    RegisterClipboardFormatW, SetClipboardData, CF_OEMTEXT, CF_TEXT, CF_UNICODETEXT,
+    RegisterClipboardFormatW, SetClipboardData,
 };
 #[cfg(windows)]
 use windows_sys::Win32::System::Memory::{
@@ -20,6 +20,12 @@ use windows_sys::Win32::System::Memory::{
 const START_MARKER: &str = "<!--StartFragment-->";
 #[cfg_attr(not(windows), allow(dead_code))]
 const END_MARKER: &str = "<!--EndFragment-->";
+#[cfg(windows)]
+const CF_TEXT_FORMAT: u32 = 1;
+#[cfg(windows)]
+const CF_OEMTEXT_FORMAT: u32 = 7;
+#[cfg(windows)]
+const CF_UNICODETEXT_FORMAT: u32 = 13;
 
 #[derive(Deserialize)]
 struct WritePayload {
@@ -183,9 +189,9 @@ fn write_html(html: &str, text: &str) -> Result<(), String> {
         }
 
         set_clipboard_bytes(format, &raw_html)?;
-        set_clipboard_bytes(CF_UNICODETEXT, wide_as_bytes(&unicode_text))?;
-        set_clipboard_bytes(CF_TEXT, &ansi_text)?;
-        let _ = set_clipboard_bytes(CF_OEMTEXT, &ansi_text);
+        set_clipboard_bytes(CF_UNICODETEXT_FORMAT, wide_as_bytes(&unicode_text))?;
+        set_clipboard_bytes(CF_TEXT_FORMAT, &ansi_text)?;
+        let _ = set_clipboard_bytes(CF_OEMTEXT_FORMAT, &ansi_text);
     }
 
     Ok(())
