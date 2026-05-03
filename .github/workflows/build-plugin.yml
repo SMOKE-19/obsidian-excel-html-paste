@@ -1,0 +1,68 @@
+name: Build Obsidian Plugin
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build plugin with Windows helper
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build Rust clipboard helper
+        run: npm run build:helper:win64
+
+      - name: Stage helper executable
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path bin | Out-Null
+          Copy-Item helper\target\x86_64-pc-windows-msvc\release\excel-html-clipboard.exe bin\excel-html-clipboard-win32-x64.exe
+
+      - name: Build Obsidian plugin
+        run: npm run build
+
+      - name: Prepare package
+        shell: pwsh
+        run: |
+          $packageDir = "dist\excel-html-paste"
+          New-Item -ItemType Directory -Force -Path "$packageDir\bin" | Out-Null
+          Copy-Item manifest.json "$packageDir\manifest.json"
+          Copy-Item main.js "$packageDir\main.js"
+          Copy-Item styles.css "$packageDir\styles.css"
+          Copy-Item bin\excel-html-clipboard-win32-x64.exe "$packageDir\bin\excel-html-clipboard-win32-x64.exe"
+          Compress-Archive -Path "$packageDir\*" -DestinationPath "dist\excel-html-paste.zip" -Force
+
+      - name: Upload unpacked plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: excel-html-paste-plugin
+          path: dist/excel-html-paste
+
+      - name: Upload plugin zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: excel-html-paste-plugin-zip
+          path: dist/excel-html-paste.zip
