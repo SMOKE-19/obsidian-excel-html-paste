@@ -259,12 +259,103 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     button.addEventListener("click", async () => {
       try {
         const html = await this.app.vault.read(htmlFile);
-        await navigator.clipboard.writeText(html);
-        new Notice("HTML 원본을 클립보드에 복사했습니다.");
+        await this.writeHtmlToClipboard(html);
+        new Notice("HTML 원본을 서식 포함 클립보드에 복사했습니다.");
       } catch (error) {
         this.reportError("HTML 원본 복사에 실패했습니다.", error);
       }
     });
+  }
+
+  private async writeHtmlToClipboard(html: string): Promise<void> {
+    if (!navigator.clipboard) {
+      throw new Error("Clipboard API를 사용할 수 없습니다.");
+    }
+
+    const normalizedHtml = this.normalizeHtmlForClipboard(html);
+    const plainText = this.htmlToPlainText(normalizedHtml);
+
+    if (typeof navigator.clipboard.write === "function" && typeof ClipboardItem !== "undefined") {
+      const item = new ClipboardItem({
+        "text/html": new Blob([normalizedHtml], { type: "text/html" }),
+        "text/plain": new Blob([plainText], { type: "text/plain" })
+      });
+      await navigator.clipboard.write([item]);
+      return;
+    }
+
+    if (typeof navigator.clipboard.writeText === "function") {
+      await navigator.clipboard.writeText(plainText || normalizedHtml);
+      new Notice("이 환경은 text/html 클립보드 쓰기를 지원하지 않아 일반 텍스트로 복사했습니다.");
+      return;
+    }
+
+    throw new Error("Clipboard write API를 사용할 수 없습니다.");
+  }
+
+  private normalizeHtmlForClipboard(html: string): string {
+    const fragment = this.extractCfHtmlFragment(html);
+    const body = fragment ?? html;
+
+    if (/<html[\s>]/i.test(body)) {
+      return body;
+    }
+
+    return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+</head>
+<body>
+${body}
+</body>
+</html>`;
+  }
+
+  private extractCfHtmlFragment(html: string): string | null {
+    if (!/^Version:/i.test(html.trimStart())) {
+      return null;
+    }
+
+    const fragmentMatch = html.match(/<!--StartFragment-->([\s\S]*?)<!--EndFragment-->/i);
+    if (fragmentMatch) {
+      return fragmentMatch[1];
+    }
+
+    const startMatch = html.match(/StartHTML:(\d+)/i);
+    const endMatch = html.match(/EndHTML:(\d+)/i);
+    if (!startMatch || !endMatch) {
+      return null;
+    }
+
+    const start = Number(startMatch[1]);
+    const end = Number(endMatch[1]);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) {
+      return null;
+    }
+
+    return html.slice(start, end);
+  }
+
+  private htmlToPlainText(html: string): string {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const table = doc.querySelector("table");
+    if (table) {
+      const rows = Array.from(table.querySelectorAll("tr"));
+      return rows
+        .map((row) =>
+          Array.from(row.querySelectorAll("th,td"))
+            .map((cell) => this.normalizeCellText(cell.textContent ?? ""))
+            .join("\t")
+        )
+        .join("\n");
+    }
+
+    return this.normalizeCellText(doc.body.textContent ?? "");
+  }
+
+  private normalizeCellText(text: string): string {
+    return text.replace(/\s+/g, " ").trim();
   }
 
   private parseMetaPath(source: string): string | null {
