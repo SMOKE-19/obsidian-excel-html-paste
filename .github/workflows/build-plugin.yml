@@ -60,9 +60,11 @@ jobs:
         with:
           name: excel-html-paste-plugin
           path: dist/excel-html-paste
+          retention-days: 7
 
       - name: Upload plugin zip
         uses: actions/upload-artifact@v4
         with:
           name: excel-html-paste-plugin-zip
           path: dist/excel-html-paste.zip
+          retention-days: 7
