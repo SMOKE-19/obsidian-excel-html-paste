@@ -1,5 +1,6 @@
 import { spawn } from "child_process";
-import { Editor, MarkdownPostProcessorContext, Notice, Plugin, TFile } from "obsidian";
+import { join } from "path";
+import { Editor, FileSystemAdapter, MarkdownPostProcessorContext, Notice, Plugin, TFile } from "obsidian";
 
 const ASSET_ROOT = "assets/excel-paste";
 const CODE_BLOCK = "excel-html-asset";
@@ -96,7 +97,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       }
     }
 
-    const nativeHtml = await this.tryReadHtmlWithPythonNativeClipboard();
+    const nativeHtml = await this.tryReadHtmlWithNativeClipboard();
 
     if (!htmlBlob && !nativeHtml) {
       throw new Error("클립보드에 text/html 데이터가 없습니다.");
@@ -123,22 +124,25 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     };
   }
 
-  private async tryReadHtmlWithPythonNativeClipboard(): Promise<string | null> {
+  private async tryReadHtmlWithNativeClipboard(): Promise<string | null> {
     if (!this.isWindowsDesktop()) {
       return null;
     }
 
-    const errors: string[] = [];
-    for (const command of this.pythonCommands(PYTHON_READ_CF_HTML_HELPER)) {
-      try {
-        return await this.runPythonHelper(command.executable, command.args, "");
-      } catch (error) {
-        errors.push(`${command.executable}: ${this.errorMessage(error)}`);
-      }
+    const helperPath = this.getNativeHelperPath();
+    if (!helperPath) {
+      console.warn("Native clipboard helper path is unavailable.");
+      new Notice("Windows native helper를 찾지 못해 브라우저 클립보드로 저장합니다.");
+      return null;
     }
 
-    console.warn("Python native clipboard read failed; falling back to browser clipboard.", errors.join(" | "));
-    return null;
+    try {
+      return await this.runNativeHelper(["read-html"], "");
+    } catch (error) {
+      console.warn(`Native clipboard read failed via ${helperPath}; falling back to browser clipboard.`, error);
+      new Notice("Windows native HTML 읽기에 실패해 브라우저 클립보드로 저장합니다.");
+      return null;
+    }
   }
 
   private async createExcelAsset(payload: ClipboardExcelPayload): Promise<CreatedAsset> {
@@ -296,10 +300,10 @@ export default class ExcelHtmlPastePlugin extends Plugin {
 
     if (this.isWindowsDesktop()) {
       try {
-        await this.writeHtmlWithPythonNativeClipboard(normalizedHtml, plainText);
+        await this.writeHtmlWithNativeClipboard(normalizedHtml, plainText);
         return;
       } catch (error) {
-        console.warn("Python native clipboard helper failed; falling back to browser clipboard.", error);
+        console.warn("Native clipboard helper failed; falling back to browser clipboard.", error);
         new Notice("Windows native HTML 복사에 실패해 브라우저 클립보드 방식으로 재시도합니다.");
       }
     }
@@ -330,33 +334,33 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     return typeof process !== "undefined" && process.platform === "win32";
   }
 
-  private async writeHtmlWithPythonNativeClipboard(html: string, text: string): Promise<void> {
+  private async writeHtmlWithNativeClipboard(html: string, text: string): Promise<void> {
     const payload = JSON.stringify({ html, text });
-    const errors: string[] = [];
+    await this.runNativeHelper(["write-html"], payload);
+  }
 
-    for (const command of this.pythonCommands(PYTHON_WRITE_CF_HTML_HELPER)) {
-      try {
-        await this.runPythonHelper(command.executable, command.args, payload);
-        return;
-      } catch (error) {
-        errors.push(`${command.executable}: ${this.errorMessage(error)}`);
-      }
+  private getNativeHelperPath(): string | null {
+    if (!this.isWindowsDesktop() || !(this.app.vault.adapter instanceof FileSystemAdapter)) {
+      return null;
     }
 
-    throw new Error(errors.join(" | "));
+    const helperName = process.arch === "arm64"
+      ? "excel-html-clipboard-win32-arm64.exe"
+      : "excel-html-clipboard-win32-x64.exe";
+
+    const pluginDir = this.manifest.dir ?? join(this.app.vault.configDir, "plugins", this.manifest.id);
+    return join(this.app.vault.adapter.getBasePath(), pluginDir, "bin", helperName);
   }
 
-  private pythonCommands(script: string): Array<{ executable: string; args: string[] }> {
-    return [
-      { executable: "python", args: ["-c", script] },
-      { executable: "py", args: ["-3", "-c", script] },
-      { executable: "python3", args: ["-c", script] }
-    ];
-  }
-
-  private runPythonHelper(executable: string, args: string[], input: string): Promise<string> {
+  private runNativeHelper(args: string[], input: string): Promise<string> {
     return new Promise((resolve, reject) => {
-      const child = spawn(executable, args, {
+      const helperPath = this.getNativeHelperPath();
+      if (!helperPath) {
+        reject(new Error("Windows native clipboard helper를 찾을 수 없습니다."));
+        return;
+      }
+
+      const child = spawn(helperPath, args, {
         windowsHide: true,
         stdio: ["pipe", "pipe", "pipe"]
       });
@@ -364,7 +368,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       const stderr: string[] = [];
       const timer = window.setTimeout(() => {
         child.kill();
-        reject(new Error("Python helper timed out."));
+        reject(new Error("Native clipboard helper timed out."));
       }, 10000);
 
       child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk.toString("utf8")));
@@ -380,7 +384,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
           return;
         }
 
-        reject(new Error(stderr.join("").trim() || stdout.join("").trim() || `Python helper exited with code ${code}.`));
+        reject(new Error(stderr.join("").trim() || stdout.join("").trim() || `Native clipboard helper exited with code ${code}.`));
       });
 
       child.stdin.write(input);
@@ -530,157 +534,3 @@ ${body}
     return error instanceof Error ? error.message : String(error);
   }
 }
-
-const PYTHON_READ_CF_HTML_HELPER = String.raw`
-import sys
-
-try:
-    import win32clipboard as wc
-except Exception as exc:
-    raise SystemExit(f"pywin32 is required: {exc}")
-
-
-def decode_html_data(data) -> str:
-    if isinstance(data, str):
-        return data
-
-    if isinstance(data, bytes):
-        for encoding in ("utf-8", "cp949", "mbcs"):
-            try:
-                return data.decode(encoding)
-            except Exception:
-                continue
-        return data.decode("utf-8", errors="replace")
-
-    return str(data)
-
-
-def main() -> None:
-    html_format = wc.RegisterClipboardFormat("HTML Format")
-    wc.OpenClipboard()
-    try:
-        if not wc.IsClipboardFormatAvailable(html_format):
-            raise SystemExit("HTML Format is not available.")
-        data = wc.GetClipboardData(html_format)
-    finally:
-        wc.CloseClipboard()
-
-    sys.stdout.write(decode_html_data(data))
-
-
-if __name__ == "__main__":
-    main()
-`;
-
-const PYTHON_WRITE_CF_HTML_HELPER = String.raw`
-import json
-import re
-import sys
-
-try:
-    import win32clipboard as wc
-except Exception as exc:
-    raise SystemExit(f"pywin32 is required: {exc}")
-
-
-START_MARKER = "<!--StartFragment-->"
-END_MARKER = "<!--EndFragment-->"
-
-
-def ensure_html_document(html: str) -> str:
-    if START_MARKER in html and END_MARKER in html:
-        return html
-
-    if re.search(r"<html[\s>]", html, re.I):
-        body_open = re.search(r"<body[^>]*>", html, re.I)
-        body_close = re.search(r"</body\s*>", html, re.I)
-        if body_open and body_close and body_open.end() <= body_close.start():
-            return (
-                html[: body_open.end()]
-                + START_MARKER
-                + html[body_open.end() : body_close.start()]
-                + END_MARKER
-                + html[body_close.start() :]
-            )
-        return START_MARKER + html + END_MARKER
-
-    return (
-        "<!DOCTYPE html>\r\n"
-        "<html>\r\n"
-        "<head><meta charset=\"utf-8\"></head>\r\n"
-        "<body>\r\n"
-        + START_MARKER
-        + html
-        + END_MARKER
-        + "\r\n</body>\r\n</html>"
-    )
-
-
-def build_cf_html(html: str) -> bytes:
-    html_doc = ensure_html_document(html)
-    start_marker_index = html_doc.index(START_MARKER) + len(START_MARKER)
-    end_marker_index = html_doc.index(END_MARKER)
-
-    header_template = (
-        "Version:0.9\r\n"
-        "StartHTML:{start_html:010d}\r\n"
-        "EndHTML:{end_html:010d}\r\n"
-        "StartFragment:{start_fragment:010d}\r\n"
-        "EndFragment:{end_fragment:010d}\r\n"
-    )
-    placeholder = header_template.format(
-        start_html=0,
-        end_html=0,
-        start_fragment=0,
-        end_fragment=0,
-    )
-    start_html = len(placeholder.encode("utf-8"))
-    before_fragment = html_doc[:start_marker_index].encode("utf-8")
-    fragment = html_doc[start_marker_index:end_marker_index].encode("utf-8")
-    html_bytes = html_doc.encode("utf-8")
-    start_fragment = start_html + len(before_fragment)
-    end_fragment = start_fragment + len(fragment)
-    end_html = start_html + len(html_bytes)
-    header = header_template.format(
-        start_html=start_html,
-        end_html=end_html,
-        start_fragment=start_fragment,
-        end_fragment=end_fragment,
-    )
-    return header.encode("utf-8") + html_bytes
-
-
-def encode_ansi(text: str) -> bytes:
-    for encoding in ("cp949", "mbcs", "utf-8"):
-        try:
-            return text.encode(encoding, errors="replace")
-        except Exception:
-            continue
-    return text.encode(errors="replace")
-
-
-def main() -> None:
-    payload = json.loads(sys.stdin.read())
-    html = payload["html"]
-    text = payload.get("text") or ""
-    raw_html = build_cf_html(html)
-    html_format = wc.RegisterClipboardFormat("HTML Format")
-
-    wc.OpenClipboard()
-    try:
-        wc.EmptyClipboard()
-        wc.SetClipboardData(wc.CF_UNICODETEXT, text)
-        ansi_text = encode_ansi(text)
-        wc.SetClipboardData(wc.CF_TEXT, ansi_text)
-        try:
-            wc.SetClipboardData(wc.CF_OEMTEXT, ansi_text)
-        except Exception:
-            pass
-        wc.SetClipboardData(html_format, raw_html)
-    finally:
-        wc.CloseClipboard()
-
-
-if __name__ == "__main__":
-    main()
-`;

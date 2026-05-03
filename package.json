@@ -5,7 +5,9 @@
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "build:helper": "cargo build --manifest-path helper/Cargo.toml --release",
+    "build:helper:win64": "cargo build --manifest-path helper/Cargo.toml --release --target x86_64-pc-windows-msvc"
   },
   "keywords": [
     "obsidian",
