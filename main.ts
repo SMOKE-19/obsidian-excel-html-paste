@@ -8,7 +8,8 @@ import {
   Menu,
   Notice,
   Plugin,
-  TFile
+  TFile,
+  getLanguage
 } from "obsidian";
 
 const ASSET_ROOT = "assets/excel-paste";
@@ -51,14 +52,120 @@ interface ArchivedAssetFile {
 }
 
 type ReplacementMode = "archive" | "overwrite";
+type Locale = "en" | "ko";
+
+const STRINGS: Record<Locale, Record<string, string>> = {
+  en: {
+    pasteMenu: "Paste Excel table (HTML)",
+    readClipboardFailed: "Could not read Excel HTML data from the clipboard.",
+    noImageData: "No image data found. Saving HTML-only asset.",
+    assetInserted: "Inserted Excel HTML asset.",
+    assetSaveFailed: "Failed to save Excel HTML asset.",
+    clipboardReadApiUnavailable: "Clipboard read API is unavailable.",
+    clipboardReadFailed: "Clipboard permission was denied or reading failed",
+    noClipboardHtml: "Clipboard does not contain text/html data.",
+    htmlBlobReadFailed: "Failed to convert HTML Blob to text",
+    emptyClipboardHtml: "Clipboard HTML data is empty.",
+    nativeReadFailed: "Windows native HTML read failed. Saving through browser clipboard fallback.",
+    rollbackPartialFailed: "Failed to rollback some generated files. Check the console.",
+    missingAssetPath: "Excel HTML asset path is missing.",
+    missingMeta: "Could not find meta.json",
+    readMetaFailed: "Could not read meta.json",
+    missingHtmlAsset: "Could not find HTML asset",
+    missingImageAsset: "Could not find image asset",
+    htmlOnlyAsset: "HTML-only Excel asset",
+    copyHtmlAria: "Copy original Excel HTML",
+    copyHtmlSuccess: "Copied original HTML to the clipboard with formatting.",
+    copyHtmlFailed: "Failed to copy original HTML.",
+    replaceWithHistory: "Replace Excel table (HTML), keep history",
+    replaceCompletely: "Replace Excel table (HTML) completely",
+    deleteAssetMenu: "Delete Excel asset",
+    replaceArchivedSuccess: "Replaced Excel asset with clipboard content and kept previous files as history.",
+    replaceOverwriteSuccess: "Completely replaced Excel asset with clipboard content.",
+    replaceFailed: "Failed to replace Excel asset.",
+    unmanagedAssetPath: "Path is not a managed asset path",
+    confirmDeleteAsset: "Delete this Excel asset block and the linked asset folder?",
+    removeBlockFailed: "Failed to remove Excel asset block from the note.",
+    assetDeleted: "Deleted Excel asset.",
+    assetFolderDeleteFailed: "Failed to delete asset folder. The note block was removed.",
+    currentNoteMissing: "Could not find the current note",
+    sectionMissing: "Could not locate this rendered asset in the note. Refresh Reading view and try again.",
+    historyPathFailed: "Could not create a history filename",
+    nativeCopyFailed: "Windows native HTML copy failed. Retrying with browser clipboard fallback.",
+    clipboardWriteApiUnavailable: "Clipboard API is unavailable.",
+    textHtmlWriteUnavailable: "This environment cannot write text/html to the clipboard, so plain text was copied.",
+    clipboardWriteUnavailable: "Clipboard write API is unavailable.",
+    nativeHelperMissing: "Windows native clipboard helper was not found.",
+    invalidMetaObject: "meta.json is not an object.",
+    unsupportedAssetType: "Unsupported asset type.",
+    unsupportedAssetVersion: "Unsupported asset version.",
+    invalidMetaImage: "meta.image is invalid.",
+    invalidMetaHtml: "meta.html is invalid.",
+    invalidMetaSearch: "meta.search is invalid.",
+    invalidMetaCreatedAt: "meta.createdAt is invalid."
+  },
+  ko: {
+    pasteMenu: "Excel 표(HTML) 붙여넣기",
+    readClipboardFailed: "클립보드에서 Excel HTML 데이터를 읽지 못했습니다.",
+    noImageData: "이미지 데이터가 없어 HTML만 asset으로 저장합니다.",
+    assetInserted: "Excel HTML asset을 삽입했습니다.",
+    assetSaveFailed: "Excel HTML asset 저장에 실패했습니다.",
+    clipboardReadApiUnavailable: "Clipboard read API를 사용할 수 없습니다.",
+    clipboardReadFailed: "Clipboard 접근 권한이 없거나 읽기에 실패했습니다",
+    noClipboardHtml: "클립보드에 text/html 데이터가 없습니다.",
+    htmlBlobReadFailed: "HTML Blob을 텍스트로 변환하지 못했습니다",
+    emptyClipboardHtml: "클립보드 HTML 데이터가 비어 있습니다.",
+    nativeReadFailed: "Windows native HTML 읽기에 실패해 브라우저 클립보드로 저장합니다.",
+    rollbackPartialFailed: "일부 생성 파일 rollback에 실패했습니다. 콘솔을 확인하세요.",
+    missingAssetPath: "Excel HTML asset path가 없습니다.",
+    missingMeta: "meta.json을 찾을 수 없습니다",
+    readMetaFailed: "meta.json을 읽을 수 없습니다",
+    missingHtmlAsset: "HTML asset을 찾을 수 없습니다",
+    missingImageAsset: "이미지 asset을 찾을 수 없습니다",
+    htmlOnlyAsset: "HTML-only Excel asset",
+    copyHtmlAria: "Excel HTML 원본 복사",
+    copyHtmlSuccess: "HTML 원본을 서식 포함 클립보드에 복사했습니다.",
+    copyHtmlFailed: "HTML 원본 복사에 실패했습니다.",
+    replaceWithHistory: "이력 남기고 Excel 표(HTML) 교체",
+    replaceCompletely: "Excel 표(HTML) 완전 교체",
+    deleteAssetMenu: "Excel asset 삭제",
+    replaceArchivedSuccess: "Excel asset을 새 클립보드 내용으로 교체하고 이전 파일을 이력으로 보관했습니다.",
+    replaceOverwriteSuccess: "Excel asset을 새 클립보드 내용으로 완전 교체했습니다.",
+    replaceFailed: "Excel asset 교체에 실패했습니다.",
+    unmanagedAssetPath: "관리 대상 asset 경로가 아닙니다",
+    confirmDeleteAsset: "이 Excel asset 블록과 연결된 asset 폴더를 삭제할까요?",
+    removeBlockFailed: "문서에서 Excel asset 블록을 제거하지 못했습니다.",
+    assetDeleted: "Excel asset을 삭제했습니다.",
+    assetFolderDeleteFailed: "asset 폴더 삭제에 실패했습니다. 문서 블록은 제거되었습니다.",
+    currentNoteMissing: "현재 문서를 찾을 수 없습니다",
+    sectionMissing: "렌더된 asset의 문서 위치를 찾지 못했습니다. 읽기 화면을 새로고침한 뒤 다시 시도하세요.",
+    historyPathFailed: "이력 파일명을 만들 수 없습니다",
+    nativeCopyFailed: "Windows native HTML 복사에 실패해 브라우저 클립보드 방식으로 재시도합니다.",
+    clipboardWriteApiUnavailable: "Clipboard API를 사용할 수 없습니다.",
+    textHtmlWriteUnavailable: "이 환경은 text/html 클립보드 쓰기를 지원하지 않아 일반 텍스트로 복사했습니다.",
+    clipboardWriteUnavailable: "Clipboard write API를 사용할 수 없습니다.",
+    nativeHelperMissing: "Windows native clipboard helper를 찾을 수 없습니다.",
+    invalidMetaObject: "meta.json이 객체가 아닙니다.",
+    unsupportedAssetType: "지원하지 않는 asset type입니다.",
+    unsupportedAssetVersion: "지원하지 않는 asset version입니다.",
+    invalidMetaImage: "meta.image 값이 올바르지 않습니다.",
+    invalidMetaHtml: "meta.html 값이 올바르지 않습니다.",
+    invalidMetaSearch: "meta.search 값이 올바르지 않습니다.",
+    invalidMetaCreatedAt: "meta.createdAt 값이 올바르지 않습니다."
+  }
+};
 
 export default class ExcelHtmlPastePlugin extends Plugin {
+  private locale: Locale = "en";
+
   async onload() {
+    this.locale = getLanguage().toLowerCase().startsWith("ko") ? "ko" : "en";
+
     this.registerEvent(
       this.app.workspace.on("editor-menu", (menu, editor, info) => {
         menu.addItem((item) => {
           item
-            .setTitle("Excel 표(HTML) 붙여넣기")
+            .setTitle(this.t("pasteMenu"))
             .setIcon("table")
             .onClick(async () => {
               const sourcePath = info.file?.path ?? this.app.workspace.getActiveFile()?.path ?? null;
@@ -76,39 +183,43 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     );
   }
 
+  private t(key: string): string {
+    return STRINGS[this.locale][key] ?? STRINGS.en[key] ?? key;
+  }
+
   private async handleExcelPaste(editor: Editor, sourcePath: string | null): Promise<void> {
     let payload: ClipboardExcelPayload;
 
     try {
       payload = await this.readExcelClipboard();
     } catch (error) {
-      this.reportError("클립보드에서 Excel HTML 데이터를 읽지 못했습니다.", error);
+      this.reportError(this.t("readClipboardFailed"), error);
       return;
     }
 
     if (!payload.imageBuffer) {
-      new Notice("이미지 데이터가 없어 HTML만 asset으로 저장합니다.");
+      new Notice(this.t("noImageData"));
     }
 
     try {
       const asset = await this.createExcelAsset(payload, sourcePath);
       editor.replaceSelection(this.buildCodeBlock(asset.metaPath));
-      new Notice("Excel HTML asset을 삽입했습니다.");
+      new Notice(this.t("assetInserted"));
     } catch (error) {
-      this.reportError("Excel HTML asset 저장에 실패했습니다.", error);
+      this.reportError(this.t("assetSaveFailed"), error);
     }
   }
 
   private async readExcelClipboard(): Promise<ClipboardExcelPayload> {
     if (!navigator.clipboard || typeof navigator.clipboard.read !== "function") {
-      throw new Error("Clipboard read API를 사용할 수 없습니다.");
+      throw new Error(this.t("clipboardReadApiUnavailable"));
     }
 
     let items: ClipboardItems;
     try {
       items = await navigator.clipboard.read();
     } catch (error) {
-      throw new Error(`Clipboard 접근 권한이 없거나 읽기에 실패했습니다: ${this.errorMessage(error)}`);
+      throw new Error(`${this.t("clipboardReadFailed")}: ${this.errorMessage(error)}`);
     }
 
     let htmlBlob: Blob | null = null;
@@ -127,7 +238,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     const nativeHtml = await this.tryReadHtmlWithNativeClipboard();
 
     if (!htmlBlob && !nativeHtml) {
-      throw new Error("클립보드에 text/html 데이터가 없습니다.");
+      throw new Error(this.t("noClipboardHtml"));
     }
 
     let html: string | null = nativeHtml;
@@ -135,12 +246,12 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       try {
         html = await htmlBlob.text();
       } catch (error) {
-        throw new Error(`HTML Blob을 텍스트로 변환하지 못했습니다: ${this.errorMessage(error)}`);
+        throw new Error(`${this.t("htmlBlobReadFailed")}: ${this.errorMessage(error)}`);
       }
     }
 
     if (!html?.trim()) {
-      throw new Error("클립보드 HTML 데이터가 비어 있습니다.");
+      throw new Error(this.t("emptyClipboardHtml"));
     }
 
     const imageBuffer = imageBlob ? await imageBlob.arrayBuffer() : null;
@@ -165,7 +276,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       return await this.runNativeHelper(["read-html"], "");
     } catch (error) {
       console.warn(`Native clipboard read failed via ${helperPath}; falling back to browser clipboard.`, error);
-      new Notice("Windows native HTML 읽기에 실패해 브라우저 클립보드로 저장합니다.");
+      new Notice(this.t("nativeReadFailed"));
       return null;
     }
   }
@@ -239,7 +350,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     }
 
     if (failed) {
-      new Notice("일부 생성 파일 rollback에 실패했습니다. 콘솔을 확인하세요.");
+      new Notice(this.t("rollbackPartialFailed"));
     }
   }
 
@@ -263,13 +374,13 @@ export default class ExcelHtmlPastePlugin extends Plugin {
   ): Promise<void> {
     const metaPath = this.parseMetaPath(source);
     if (!metaPath) {
-      this.renderError(el, "Excel HTML asset path가 없습니다.");
+      this.renderError(el, this.t("missingAssetPath"));
       return;
     }
 
     const metaFile = this.getFile(metaPath);
     if (!metaFile) {
-      this.renderError(el, `meta.json을 찾을 수 없습니다: ${metaPath}`);
+      this.renderError(el, `${this.t("missingMeta")}: ${metaPath}`);
       return;
     }
 
@@ -277,7 +388,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     try {
       meta = this.validateMeta(JSON.parse(await this.app.vault.read(metaFile)));
     } catch (error) {
-      this.renderError(el, `meta.json을 읽을 수 없습니다: ${this.errorMessage(error)}`);
+      this.renderError(el, `${this.t("readMetaFailed")}: ${this.errorMessage(error)}`);
       return;
     }
 
@@ -285,7 +396,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     const htmlPath = `${basePath}/${meta.html}`;
     const htmlFile = this.getFile(htmlPath);
     if (!htmlFile) {
-      this.renderError(el, `HTML asset을 찾을 수 없습니다: ${htmlPath}`);
+      this.renderError(el, `${this.t("missingHtmlAsset")}: ${htmlPath}`);
       return;
     }
 
@@ -315,13 +426,13 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       } else {
         wrapper.createDiv({
           cls: "excel-html-fallback",
-          text: `이미지 asset을 찾을 수 없습니다: ${imagePath}`
+          text: `${this.t("missingImageAsset")}: ${imagePath}`
         });
       }
     } else {
       wrapper.createDiv({
         cls: "excel-html-fallback",
-        text: "HTML-only Excel asset"
+        text: this.t("htmlOnlyAsset")
       });
     }
 
@@ -330,7 +441,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       text: "HTML",
       attr: {
         type: "button",
-        "aria-label": "Excel HTML 원본 복사"
+        "aria-label": this.t("copyHtmlAria")
       }
     });
 
@@ -338,9 +449,9 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       try {
         const html = await this.app.vault.read(htmlFile);
         await this.writeHtmlToClipboard(html);
-        new Notice("HTML 원본을 서식 포함 클립보드에 복사했습니다.");
+        new Notice(this.t("copyHtmlSuccess"));
       } catch (error) {
-        this.reportError("HTML 원본 복사에 실패했습니다.", error);
+        this.reportError(this.t("copyHtmlFailed"), error);
       }
     });
   }
@@ -358,7 +469,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       const menu = new Menu();
       menu.addItem((item) => {
         item
-          .setTitle("이력 남기고 Excel 표(HTML) 교체")
+          .setTitle(this.t("replaceWithHistory"))
           .setIcon("replace")
           .onClick(async () => {
             await this.replaceRenderedAsset(processorEl, ctx, asset, "archive");
@@ -366,7 +477,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       });
       menu.addItem((item) => {
         item
-          .setTitle("Excel 표(HTML) 완전 교체")
+          .setTitle(this.t("replaceCompletely"))
           .setIcon("refresh-cw")
           .onClick(async () => {
             await this.replaceRenderedAsset(processorEl, ctx, asset, "overwrite");
@@ -374,7 +485,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       });
       menu.addItem((item) => {
         item
-          .setTitle("Excel asset 삭제")
+          .setTitle(this.t("deleteAssetMenu"))
           .setIcon("trash")
           .onClick(async () => {
             await this.deleteRenderedAsset(processorEl, ctx, asset);
@@ -395,11 +506,11 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       const updatedAt = await this.replaceAssetFilesInPlace(currentAsset, payload, ctx.sourcePath, mode);
       await this.replaceRenderedCodeBlock(el, ctx, this.buildCodeBlockSection(currentAsset.metaPath, updatedAt));
       const message = mode === "archive"
-        ? "Excel asset을 새 클립보드 내용으로 교체하고 이전 파일을 이력으로 보관했습니다."
-        : "Excel asset을 새 클립보드 내용으로 완전 교체했습니다.";
+        ? this.t("replaceArchivedSuccess")
+        : this.t("replaceOverwriteSuccess");
       new Notice(message);
     } catch (error) {
-      this.reportError("Excel asset 교체에 실패했습니다.", error);
+      this.reportError(this.t("replaceFailed"), error);
     }
   }
 
@@ -410,7 +521,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     mode: ReplacementMode
   ): Promise<string> {
     if (!this.isManagedAssetPath(asset.basePath)) {
-      throw new Error(`관리 대상 asset 경로가 아닙니다: ${asset.basePath}`);
+      throw new Error(`${this.t("unmanagedAssetPath")}: ${asset.basePath}`);
     }
 
     const archivedFiles = mode === "archive" ? await this.archiveActiveAssetFiles(asset) : [];
@@ -507,7 +618,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
 
   private async deleteAssetHistoryFiles(basePath: string): Promise<void> {
     if (!this.isManagedAssetPath(basePath)) {
-      throw new Error(`관리 대상 asset 경로가 아닙니다: ${basePath}`);
+      throw new Error(`${this.t("unmanagedAssetPath")}: ${basePath}`);
     }
 
     if (!(await this.app.vault.adapter.exists(basePath))) {
@@ -581,22 +692,22 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     ctx: MarkdownPostProcessorContext,
     asset: RenderedAsset
   ): Promise<void> {
-    if (!window.confirm("이 Excel asset 블록과 연결된 asset 폴더를 삭제할까요?")) {
+    if (!window.confirm(this.t("confirmDeleteAsset"))) {
       return;
     }
 
     try {
       await this.replaceRenderedCodeBlock(el, ctx, "");
     } catch (error) {
-      this.reportError("문서에서 Excel asset 블록을 제거하지 못했습니다.", error);
+      this.reportError(this.t("removeBlockFailed"), error);
       return;
     }
 
     try {
       await this.deleteAssetFolder(asset.basePath);
-      new Notice("Excel asset을 삭제했습니다.");
+      new Notice(this.t("assetDeleted"));
     } catch (error) {
-      this.reportError("asset 폴더 삭제에 실패했습니다. 문서 블록은 제거되었습니다.", error);
+      this.reportError(this.t("assetFolderDeleteFailed"), error);
     }
   }
 
@@ -607,12 +718,12 @@ export default class ExcelHtmlPastePlugin extends Plugin {
   ): Promise<void> {
     const sourceFile = this.getFile(ctx.sourcePath);
     if (!sourceFile) {
-      throw new Error(`현재 문서를 찾을 수 없습니다: ${ctx.sourcePath}`);
+      throw new Error(`${this.t("currentNoteMissing")}: ${ctx.sourcePath}`);
     }
 
     const section = ctx.getSectionInfo(el);
     if (!section) {
-      throw new Error("렌더된 asset의 문서 위치를 찾지 못했습니다. 읽기 화면을 새로고침한 뒤 다시 시도하세요.");
+      throw new Error(this.t("sectionMissing"));
     }
 
     const content = await this.app.vault.read(sourceFile);
@@ -626,7 +737,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
 
   private async deleteAssetFolder(basePath: string): Promise<void> {
     if (!this.isManagedAssetPath(basePath)) {
-      throw new Error(`관리 대상 asset 경로가 아닙니다: ${basePath}`);
+      throw new Error(`${this.t("unmanagedAssetPath")}: ${basePath}`);
     }
 
     if (!(await this.app.vault.adapter.exists(basePath))) {
@@ -660,7 +771,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       }
     }
 
-    throw new Error(`이력 파일명을 만들 수 없습니다: ${path}`);
+    throw new Error(`${this.t("historyPathFailed")}: ${path}`);
   }
 
   private generateHistorySuffix(): string {
@@ -689,12 +800,12 @@ export default class ExcelHtmlPastePlugin extends Plugin {
         return;
       } catch (error) {
         console.warn("Native clipboard helper failed; falling back to browser clipboard.", error);
-        new Notice("Windows native HTML 복사에 실패해 브라우저 클립보드 방식으로 재시도합니다.");
+        new Notice(this.t("nativeCopyFailed"));
       }
     }
 
     if (!navigator.clipboard) {
-      throw new Error("Clipboard API를 사용할 수 없습니다.");
+      throw new Error(this.t("clipboardWriteApiUnavailable"));
     }
 
     if (typeof navigator.clipboard.write === "function" && typeof ClipboardItem !== "undefined") {
@@ -708,11 +819,11 @@ export default class ExcelHtmlPastePlugin extends Plugin {
 
     if (typeof navigator.clipboard.writeText === "function") {
       await navigator.clipboard.writeText(plainText || normalizedHtml);
-      new Notice("이 환경은 text/html 클립보드 쓰기를 지원하지 않아 일반 텍스트로 복사했습니다.");
+      new Notice(this.t("textHtmlWriteUnavailable"));
       return;
     }
 
-    throw new Error("Clipboard write API를 사용할 수 없습니다.");
+    throw new Error(this.t("clipboardWriteUnavailable"));
   }
 
   private isWindowsDesktop(): boolean {
@@ -742,7 +853,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     return new Promise((resolve, reject) => {
       const helperPath = this.getNativeHelperPath();
       if (!helperPath) {
-        reject(new Error("Windows native clipboard helper를 찾을 수 없습니다."));
+        reject(new Error(this.t("nativeHelperMissing")));
         return;
       }
 
@@ -913,32 +1024,32 @@ ${body}
 
   private validateMeta(value: unknown): ExcelAssetMeta {
     if (!value || typeof value !== "object") {
-      throw new Error("meta.json이 객체가 아닙니다.");
+      throw new Error(this.t("invalidMetaObject"));
     }
 
     const meta = value as Partial<ExcelAssetMeta>;
     if (meta.type !== ASSET_TYPE) {
-      throw new Error("지원하지 않는 asset type입니다.");
+      throw new Error(this.t("unsupportedAssetType"));
     }
 
     if (meta.version !== 1) {
-      throw new Error("지원하지 않는 asset version입니다.");
+      throw new Error(this.t("unsupportedAssetVersion"));
     }
 
     if (meta.image !== null && typeof meta.image !== "string") {
-      throw new Error("meta.image 값이 올바르지 않습니다.");
+      throw new Error(this.t("invalidMetaImage"));
     }
 
     if (typeof meta.html !== "string" || !meta.html) {
-      throw new Error("meta.html 값이 올바르지 않습니다.");
+      throw new Error(this.t("invalidMetaHtml"));
     }
 
     if (meta.search !== undefined && typeof meta.search !== "string") {
-      throw new Error("meta.search 값이 올바르지 않습니다.");
+      throw new Error(this.t("invalidMetaSearch"));
     }
 
     if (typeof meta.createdAt !== "string" || !meta.createdAt) {
-      throw new Error("meta.createdAt 값이 올바르지 않습니다.");
+      throw new Error(this.t("invalidMetaCreatedAt"));
     }
 
     return meta as ExcelAssetMeta;

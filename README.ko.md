@@ -181,6 +181,7 @@ GitHub Actions로 배포되는 `excel-html-paste-plugin` artifact에는 Windows 
 ## 동작 메모
 
 - 플러그인은 Desktop 전용입니다.
+- 플러그인 UI는 기본적으로 영어를 사용하고, Obsidian 언어가 `ko`로 시작하면 메뉴, Notice, 확인창, 플러그인 렌더링 오류가 한국어로 표시됩니다.
 - 클립보드에 `text/html`이 없으면 붙여넣기를 중단합니다.
 - 클립보드에 이미지가 없으면 HTML 원본과 검색용 Markdown만 저장합니다.
 - 생성되는 asset 경로는 `assets/excel-paste/` 아래로 제한됩니다.

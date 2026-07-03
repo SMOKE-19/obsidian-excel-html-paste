@@ -6,7 +6,7 @@ Excel HTML Paste is an Obsidian plugin that stores tables copied from Excel as m
 
 ## Features
 
-- Adds an editor context-menu command: `Excel 표(HTML) 붙여넣기`
+- Adds an editor context-menu command: `Paste Excel table (HTML)`
 - Stores the original Excel HTML as `table.html`
 - Stores the clipboard image as `table.png` when available
 - Creates a searchable Markdown index file, `table.search.md`
@@ -23,7 +23,7 @@ The helper is a small Rust native executable. It directly reads and writes the W
 
 ### Without The Helper
 
-- `Excel 표(HTML) 붙여넣기` reads `text/html` and `image/png` through the browser/Electron Clipboard API.
+- `Paste Excel table (HTML)` reads `text/html` and `image/png` through the browser/Electron Clipboard API.
 - Asset creation, image preview, `table.html`, `table.search.md`, replacement, and deletion still work.
 - The `HTML` button writes `text/html` and `text/plain` through the standard Clipboard API.
 - Copying HTML into browsers, mail clients, and document editors will usually work.
@@ -54,7 +54,7 @@ In short, the helper is an optional component for improving **Windows Excel form
 
 ## Usage Flow
 
-Copy a table from Excel, right-click in the Obsidian editor, and choose `Excel 표(HTML) 붙여넣기`.
+Copy a table from Excel, right-click in the Obsidian editor, and choose `Paste Excel table (HTML)`.
 
 The plugin creates an asset folder in the vault and inserts a code block into the current note.
 
@@ -80,9 +80,9 @@ In Reading view, this code block is rendered as an Excel table image preview. If
 
 Right-click a rendered Excel asset to access these actions:
 
-- `이력 남기고 Excel 표(HTML) 교체`: Archives the current `table.html`, `table.png`, `table.search.md`, and `meta.json` with timestamped filenames, then replaces the active files with the current clipboard content.
-- `Excel 표(HTML) 완전 교체`: Overwrites the active files with the current clipboard content and deletes previous history files.
-- `Excel asset 삭제`: Removes the code block from the note and deletes the linked asset folder.
+- `Replace Excel table (HTML), keep history`: Archives the current `table.html`, `table.png`, `table.search.md`, and `meta.json` with timestamped filenames, then replaces the active files with the current clipboard content.
+- `Replace Excel table (HTML) completely`: Overwrites the active files with the current clipboard content and deletes previous history files.
+- `Delete Excel asset`: Removes the code block from the note and deletes the linked asset folder.
 
 Replacement operations include rollback handling where possible, so existing files are restored if replacement fails partway through.
 
@@ -181,6 +181,7 @@ The `excel-html-paste-plugin` artifact produced by GitHub Actions includes the W
 ## Behavior Notes
 
 - The plugin is desktop-only.
+- The plugin uses English UI text by default. When Obsidian's language starts with `ko`, menus, notices, confirmations, and plugin-rendered errors are shown in Korean.
 - If the clipboard does not contain `text/html`, paste is aborted.
 - If the clipboard does not contain an image, only the HTML source and searchable Markdown index are stored.
 - Generated assets are restricted to `assets/excel-paste/`.
