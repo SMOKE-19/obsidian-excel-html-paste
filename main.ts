@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import { existsSync } from "fs";
 import { join } from "path";
 import {
   Editor,
@@ -157,8 +158,6 @@ export default class ExcelHtmlPastePlugin extends Plugin {
 
     const helperPath = this.getNativeHelperPath();
     if (!helperPath) {
-      console.warn("Native clipboard helper path is unavailable.");
-      new Notice("Windows native helper를 찾지 못해 브라우저 클립보드로 저장합니다.");
       return null;
     }
 
@@ -684,7 +683,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     const normalizedHtml = this.normalizeHtmlForClipboard(html);
     const plainText = this.htmlToPlainText(normalizedHtml);
 
-    if (this.isWindowsDesktop()) {
+    if (this.isWindowsDesktop() && this.getNativeHelperPath()) {
       try {
         await this.writeHtmlWithNativeClipboard(normalizedHtml, plainText);
         return;
@@ -735,7 +734,8 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       : "excel-html-clipboard-win32-x64.exe";
 
     const pluginDir = this.manifest.dir ?? join(this.app.vault.configDir, "plugins", this.manifest.id);
-    return join(this.app.vault.adapter.getBasePath(), pluginDir, "bin", helperName);
+    const helperPath = join(this.app.vault.adapter.getBasePath(), pluginDir, "bin", helperName);
+    return existsSync(helperPath) ? helperPath : null;
   }
 
   private runNativeHelper(args: string[], input: string): Promise<string> {
