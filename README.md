@@ -110,7 +110,7 @@ excel-html-paste/
 
 파일을 배치한 뒤 Obsidian에서 커뮤니티 플러그인 목록을 새로고침하고 `Excel HTML Paste`를 활성화합니다.
 
-Windows native clipboard helper는 선택 구성입니다. Windows에서 Excel의 CF_HTML 클립보드를 더 안정적으로 읽고 쓰고 싶을 때만 helper 실행 파일을 추가로 배치합니다.
+Windows native clipboard helper는 선택 구성입니다. 기본 설치와 기본 붙여넣기 동작에는 helper 실행 파일이 필요하지 않습니다. Windows에서 Excel의 CF_HTML 클립보드를 더 안정적으로 읽고 쓰고 싶을 때만 helper 실행 파일을 추가로 배치합니다.
 
 ```text
 excel-html-paste/
