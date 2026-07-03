@@ -16,7 +16,7 @@
     "clipboard",
     "html"
   ],
-  "author": "",
+  "author": "SMOKE-19",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.11.30",

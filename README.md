@@ -131,6 +131,22 @@ vault 안에서는 다음 위치가 됩니다.
 
 현재 저장소의 `bin/`에는 자리표시자인 `.gitkeep`만 있습니다. 기본 설치에는 문제가 없으며, 실제 helper 실행 파일은 필요한 경우에만 별도로 빌드해서 배치합니다.
 
+## Obsidian 커뮤니티 플러그인 등록
+
+Obsidian 커뮤니티 플러그인 목록에 올리려면 GitHub 공개 저장소와 GitHub Release가 필요합니다. Obsidian은 커뮤니티 플러그인 목록에서 `manifest.json`과 `README.md`를 읽고, 설치할 때는 `manifest.json`의 버전과 같은 태그의 GitHub Release에서 `manifest.json`, `main.js`, `styles.css`를 내려받습니다.
+
+등록 준비 체크리스트는 다음과 같습니다.
+
+- 저장소가 공개되어 있어야 합니다.
+- `README.md`, `LICENSE`, `manifest.json`, `versions.json`이 저장소에 있어야 합니다.
+- `manifest.json`의 `id`, `name`, `version`, `minAppVersion`, `description`, `author` 값이 정확해야 합니다.
+- `npm run build`로 생성한 `main.js`가 준비되어야 합니다.
+- `manifest.json`의 `version`과 같은 Git 태그 및 GitHub Release를 만들어야 합니다.
+- Release asset에는 `manifest.json`, `main.js`, `styles.css`를 포함해야 합니다.
+- 이후 `obsidianmd/obsidian-releases` 저장소의 `community-plugins.json`에 플러그인 항목을 추가하는 PR을 보냅니다.
+
+공식 커뮤니티 플러그인 등록은 Obsidian 팀의 리뷰를 거칩니다. 이 저장소는 MIT License를 사용하므로 사용, 수정, 재배포, 상업적 사용 측면에서 비교적 부담이 적은 오픈소스 형태입니다.
+
 ## 동작 메모
 
 - 플러그인은 Desktop 전용입니다.
@@ -138,3 +154,7 @@ vault 안에서는 다음 위치가 됩니다.
 - 클립보드에 이미지가 없으면 HTML 원본과 검색용 Markdown만 저장합니다.
 - 생성되는 asset 경로는 `assets/excel-paste/` 아래로 제한됩니다.
 - `table.search.md`는 Obsidian 검색에 걸리도록 HTML table 내용을 Markdown table 형태로 변환한 보조 파일입니다.
+
+## 라이선스
+
+이 프로젝트는 [MIT License](LICENSE)를 사용합니다.
