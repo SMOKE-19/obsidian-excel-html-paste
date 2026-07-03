@@ -45,7 +45,7 @@ jobs:
       - name: Build Obsidian plugin
         run: npm run build
 
-      - name: Prepare package
+      - name: Prepare package with helper
         shell: pwsh
         run: |
           $packageDir = "dist\excel-html-paste"
@@ -55,11 +55,21 @@ jobs:
           Copy-Item styles.css "$packageDir\styles.css"
           Copy-Item bin\excel-html-clipboard-win32-x64.exe "$packageDir\bin\excel-html-clipboard-win32-x64.exe"
 
-      - name: Create release zip
+      - name: Prepare package without helper
         shell: pwsh
         run: |
-          $zipPath = "dist\excel-html-paste-plugin-${{ github.ref_name }}.zip"
-          Compress-Archive -Path dist\excel-html-paste\* -DestinationPath $zipPath -Force
+          $packageDir = "dist\excel-html-paste-no-helper"
+          New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
+          Copy-Item manifest.json "$packageDir\manifest.json"
+          Copy-Item main.js "$packageDir\main.js"
+          Copy-Item styles.css "$packageDir\styles.css"
+
+      - name: Create release zips
+        shell: pwsh
+        run: |
+          $version = (Get-Content manifest.json | ConvertFrom-Json).version
+          Compress-Archive -Path dist\excel-html-paste\* -DestinationPath "dist\excel-html-paste-$version-with-helper.zip" -Force
+          Compress-Archive -Path dist\excel-html-paste-no-helper\* -DestinationPath "dist\excel-html-paste-$version-no-helper.zip" -Force
 
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
@@ -67,6 +77,7 @@ jobs:
           name: excel-html-paste-plugin
           path: |
             dist/excel-html-paste
+            dist/excel-html-paste-no-helper
             dist/*.zip
           retention-days: 7
 
