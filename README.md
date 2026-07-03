@@ -15,6 +15,20 @@ Excel HTML Paste is an Obsidian plugin that stores tables copied from Excel as m
 - Provides rendered-asset context-menu actions for history-preserving replacement, full replacement, and deletion
 - On Windows, improves CF_HTML read/write behavior through a native clipboard helper
 
+## Why Not Markdown Tables?
+
+This plugin is not intended to replace Excel-to-Markdown conversion plugins. It is designed for cases where preserving Excel's visual formatting matters more than Markdown editability.
+
+Use this plugin when:
+
+- the table contains merged cells
+- colors, borders, widths, or layout carry important meaning
+- the table is too wide or visually complex for comfortable Markdown editing
+- you want to keep the original Excel HTML representation as a vault asset
+- you still want Obsidian search support through a generated `table.search.md` sidecar file
+
+If you want an editable Markdown table, an Excel-to-Markdown plugin is usually a better fit. If you want a faithful visual preview plus preserved HTML source, this plugin is the intended tool.
+
 ## UX With And Without The Windows Helper
 
 The plugin can be used without the helper. The helper is not required for the basic asset workflow. However, on Windows, round-tripping Excel HTML formatting is most reliable when the helper is available.
