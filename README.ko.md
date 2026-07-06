@@ -106,6 +106,7 @@ path: assets/excel-paste/{id}/meta.json
 - `styles.css`: 렌더링된 Excel 이미지, HTML 복사 버튼, 오류/fallback 표시 스타일
 - `manifest.json`: Obsidian 플러그인 메타데이터
 - `esbuild.config.mjs`: `main.ts`를 `main.js`로 번들링하는 설정
+- `.github/workflows/build-plugin.yml`: GitHub Actions에서 배포 산출물을 만들고 태그 Release에 첨부
 - `helper/`: Windows CF_HTML 읽기/쓰기를 위한 Rust native helper
 - `bin/`: 배포 시 native helper 실행 파일을 두는 위치
 
@@ -122,6 +123,8 @@ npm install
 ```bash
 npm run build
 ```
+
+`main.js`는 생성된 번들 파일입니다. Git에는 커밋하지 않고, GitHub Actions가 Release 산출물로 생성합니다.
 
 Windows native helper를 빌드할 때는 Rust toolchain이 필요합니다.
 
@@ -167,7 +170,7 @@ excel-html-paste/
 
 파일을 배치한 뒤 Obsidian에서 커뮤니티 플러그인 목록을 새로고침하고 `Excel HTML Paste`를 활성화합니다.
 
-Release에는 Obsidian 커뮤니티 플러그인 등록 호환을 위해 `manifest.json`, `main.js`, `styles.css` 개별 파일도 함께 올라갈 수 있습니다. 수동 설치할 때는 plugin artifact를 받는 쪽이 편합니다.
+Release에는 zip 패키지와 Obsidian 커뮤니티 플러그인 등록 호환을 위한 `manifest.json`, `main.js`, `styles.css` 개별 파일이 함께 올라갑니다. `v1.1.3` 같은 버전 태그를 push하면 GitHub Actions가 Release asset을 첨부합니다. 수동 설치할 때는 plugin artifact를 받는 쪽이 편합니다.
 
 Windows native clipboard helper는 선택 구성입니다. 기본 설치와 기본 붙여넣기 동작에는 helper 실행 파일이 필요하지 않습니다. Windows에서 Excel의 CF_HTML 클립보드를 더 안정적으로 읽고 쓰고 싶을 때 helper 실행 파일을 배치합니다.
 

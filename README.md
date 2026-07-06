@@ -106,6 +106,7 @@ Replacement operations include rollback handling where possible, so existing fil
 - `styles.css`: Styles for rendered Excel images, the HTML copy button, fallback states, and error states
 - `manifest.json`: Obsidian plugin metadata
 - `esbuild.config.mjs`: Bundles `main.ts` into `main.js`
+- `.github/workflows/build-plugin.yml`: Builds release artifacts with GitHub Actions and attaches them to tagged Releases
 - `helper/`: Rust native helper for Windows CF_HTML read/write support
 - `bin/`: Target location for packaged native helper executables
 
@@ -122,6 +123,8 @@ Build the Obsidian plugin JavaScript.
 ```bash
 npm run build
 ```
+
+`main.js` is a generated bundle. It is ignored by Git and produced by GitHub Actions for Release artifacts.
 
 Building the Windows native helper requires the Rust toolchain.
 
@@ -167,7 +170,7 @@ Place the extracted `excel-html-paste/` folder under your vault plugin directory
 
 After placing the files, refresh the Community Plugins list in Obsidian and enable `Excel HTML Paste`.
 
-Releases may also include individual `manifest.json`, `main.js`, and `styles.css` files for Obsidian community plugin compatibility. For manual installation, the plugin artifact is usually easier to use.
+Releases include zip packages and individual `manifest.json`, `main.js`, and `styles.css` files for Obsidian community plugin compatibility. Push a version tag such as `v1.1.3` to have GitHub Actions attach the release assets. For manual installation, the plugin artifact is usually easier to use.
 
 The Windows native clipboard helper is optional. The basic installation and paste workflow do not require the helper executable. Add the helper when you want more reliable Excel CF_HTML clipboard read/write behavior on Windows.
 

@@ -70,6 +70,9 @@ jobs:
           $version = (Get-Content manifest.json | ConvertFrom-Json).version
           Compress-Archive -Path dist\excel-html-paste\* -DestinationPath "dist\excel-html-paste-$version-with-helper.zip" -Force
           Compress-Archive -Path dist\excel-html-paste-no-helper\* -DestinationPath "dist\excel-html-paste-$version-no-helper.zip" -Force
+          Copy-Item manifest.json "dist\manifest.json"
+          Copy-Item main.js "dist\main.js"
+          Copy-Item styles.css "dist\styles.css"
 
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
@@ -79,10 +82,17 @@ jobs:
             dist/excel-html-paste
             dist/excel-html-paste-no-helper
             dist/*.zip
+            dist/manifest.json
+            dist/main.js
+            dist/styles.css
           retention-days: 7
 
       - name: Attach plugin package to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.zip
+          files: |
+            dist/*.zip
+            dist/manifest.json
+            dist/main.js
+            dist/styles.css
