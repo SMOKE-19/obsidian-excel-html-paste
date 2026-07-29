@@ -15,14 +15,13 @@
 
 .excel-html-copy-button {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  inset: 6px auto auto 6px;
   min-width: 44px;
   height: 26px;
   padding: 2px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.68);
+  background: rgba(0, 0, 0, 0.42);
   color: #fff;
   cursor: pointer;
   font-size: 12px;
@@ -32,7 +31,7 @@
 
 .excel-html-copy-button:hover,
 .excel-html-copy-button:focus-visible {
-  background: rgba(0, 0, 0, 0.82);
+  background: rgba(0, 0, 0, 0.64);
   outline: 2px solid var(--interactive-accent);
   outline-offset: 2px;
 }
