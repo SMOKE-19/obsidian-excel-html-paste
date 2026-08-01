@@ -70,15 +70,17 @@ helper는 작은 Rust native 실행 파일입니다. Windows의 `HTML Format` �
 
 Excel에서 표를 복사한 뒤 Obsidian 편집기에서 우클릭하고 `Excel 표(HTML) 붙여넣기`를 선택합니다.
 
-플러그인은 vault 안에 다음과 같은 asset 폴더를 만들고, 현재 문서에는 코드블럭을 삽입합니다.
+플러그인은 Obsidian의 `파일 및 링크 → 첨부 파일 폴더 경로`가 설정되어 있으면 해당 폴더 아래에 asset 폴더를 만들고, 현재 문서에는 코드블럭을 삽입합니다. 첨부 파일 폴더가 지정되지 않았거나 경로를 확인할 수 없으면 기존 기본 경로를 사용합니다.
 
 ```text
-assets/excel-paste/{id}/
+{첨부 파일 폴더}/excel-paste/{id}/
   meta.json
   table.html
   table.png
   table.search.md
 ```
+
+기본 폴백 경로는 `assets/excel-paste/{id}/`입니다.
 
 문서에는 다음 형태의 코드블럭이 들어갑니다.
 
@@ -201,5 +203,5 @@ GitHub Actions로 배포되는 `excel-html-paste-plugin` artifact에는 Windows 
 - 플러그인 UI는 기본적으로 영어를 사용하고, Obsidian 언어가 `ko`로 시작하면 메뉴, Notice, 확인창, 플러그인 렌더링 오류가 한국어로 표시됩니다.
 - 클립보드에 `text/html`이 없으면 붙여넣기를 중단합니다.
 - 클립보드에 이미지가 없으면 HTML 원본과 검색용 Markdown만 저장합니다.
-- 생성되는 asset 경로는 `assets/excel-paste/` 아래로 제한됩니다.
+- 생성되는 asset은 설정된 Obsidian 첨부 파일 폴더의 `excel-paste/` 아래에 저장됩니다. 첨부 경로가 없으면 `assets/excel-paste/`를 사용합니다.
 - `table.search.md`는 Obsidian 검색에 걸리도록 HTML table 내용을 Markdown table 형태로 변환한 보조 파일입니다.

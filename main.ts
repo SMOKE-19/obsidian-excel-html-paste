@@ -9,7 +9,8 @@ import {
   Notice,
   Plugin,
   TFile,
-  getLanguage
+  getLanguage,
+  normalizePath
 } from "obsidian";
 
 const ASSET_ROOT = "assets/excel-paste";
@@ -286,7 +287,8 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     sourcePath: string | null
   ): Promise<CreatedAsset> {
     const id = this.generateId();
-    const basePath = `${ASSET_ROOT}/${id}`;
+    const assetRoot = await this.resolveAssetRoot(sourcePath);
+    const basePath = `${assetRoot}/${id}`;
     const htmlPath = `${basePath}/table.html`;
     const imagePath = payload.imageBuffer ? `${basePath}/table.png` : null;
     const searchPath = `${basePath}/table.search.md`;
@@ -748,7 +750,46 @@ export default class ExcelHtmlPastePlugin extends Plugin {
   }
 
   private isManagedAssetPath(path: string): boolean {
-    return path.startsWith(`${ASSET_ROOT}/`) && !path.includes("..") && path.split("/").length >= 3;
+    const normalized = normalizePath(path);
+    const parts = normalized.split("/");
+    const id = parts[parts.length - 1] ?? "";
+    const parent = parts[parts.length - 2] ?? "";
+
+    return (
+      normalized === path &&
+      !parts.includes("..") &&
+      parent === "excel-paste" &&
+      /^\d{4}-\d{2}-\d{2}-\d{6}-[a-z0-9]{6}$/.test(id)
+    );
+  }
+
+  private async resolveAssetRoot(sourcePath: string | null): Promise<string> {
+    if (typeof this.app.fileManager.getAvailablePathForAttachment !== "function") {
+      return ASSET_ROOT;
+    }
+
+    try {
+      const probeName = `.excel-html-paste-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.tmp`;
+      const attachmentPath = await this.app.fileManager.getAvailablePathForAttachment(
+        probeName,
+        sourcePath ?? undefined
+      );
+      const separatorIndex = attachmentPath.lastIndexOf("/");
+
+      if (separatorIndex <= 0) {
+        return ASSET_ROOT;
+      }
+
+      const attachmentFolder = normalizePath(attachmentPath.slice(0, separatorIndex));
+      if (!attachmentFolder || attachmentFolder.split("/").includes("..")) {
+        return ASSET_ROOT;
+      }
+
+      return normalizePath(`${attachmentFolder}/excel-paste`);
+    } catch (error) {
+      console.warn("Could not resolve the configured Obsidian attachment folder; using the legacy asset root.", error);
+      return ASSET_ROOT;
+    }
   }
 
   private buildResourcePath(file: TFile, version: string): string {

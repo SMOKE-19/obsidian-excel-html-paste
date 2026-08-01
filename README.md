@@ -70,15 +70,17 @@ In short, the helper is an optional component for improving **Windows Excel form
 
 Copy a table from Excel, right-click in the Obsidian editor, and choose `Paste Excel table (HTML)`.
 
-The plugin creates an asset folder in the vault and inserts a code block into the current note.
+When Obsidian's **Files and links → Default location for new attachments** is configured, the plugin creates its asset folder under that location and inserts a code block into the current note. If no attachment folder is configured or the path cannot be resolved, it uses the legacy default path.
 
 ```text
-assets/excel-paste/{id}/
+{attachment folder}/excel-paste/{id}/
   meta.json
   table.html
   table.png
   table.search.md
 ```
+
+The fallback path is `assets/excel-paste/{id}/`.
 
 The inserted note content looks like this:
 
@@ -201,5 +203,5 @@ The `excel-html-paste-plugin` artifact produced by GitHub Actions includes the W
 - The plugin uses English UI text by default. When Obsidian's language starts with `ko`, menus, notices, confirmations, and plugin-rendered errors are shown in Korean.
 - If the clipboard does not contain `text/html`, paste is aborted.
 - If the clipboard does not contain an image, only the HTML source and searchable Markdown index are stored.
-- Generated assets are restricted to `assets/excel-paste/`.
+- Generated assets are stored under `excel-paste/` in the configured Obsidian attachment folder. If no attachment folder is available, the plugin uses `assets/excel-paste/`.
 - `table.search.md` is a sidecar Markdown file that converts HTML table content into Markdown table text so Obsidian search can index it.
