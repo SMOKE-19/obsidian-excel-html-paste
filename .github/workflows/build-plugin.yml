@@ -48,7 +48,8 @@ jobs:
       - name: Prepare package with helper
         shell: pwsh
         run: |
-          $packageDir = "dist\excel-html-paste"
+          $pluginId = (Get-Content manifest.json | ConvertFrom-Json).id
+          $packageDir = "dist\with-helper\$pluginId"
           New-Item -ItemType Directory -Force -Path "$packageDir\bin" | Out-Null
           Copy-Item manifest.json "$packageDir\manifest.json"
           Copy-Item main.js "$packageDir\main.js"
@@ -58,7 +59,8 @@ jobs:
       - name: Prepare package without helper
         shell: pwsh
         run: |
-          $packageDir = "dist\excel-html-paste-no-helper"
+          $pluginId = (Get-Content manifest.json | ConvertFrom-Json).id
+          $packageDir = "dist\no-helper\$pluginId"
           New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
           Copy-Item manifest.json "$packageDir\manifest.json"
           Copy-Item main.js "$packageDir\main.js"
@@ -67,20 +69,51 @@ jobs:
       - name: Create release zips
         shell: pwsh
         run: |
-          $version = (Get-Content manifest.json | ConvertFrom-Json).version
-          Compress-Archive -Path dist\excel-html-paste\* -DestinationPath "dist\excel-html-paste-$version-with-helper.zip" -Force
-          Compress-Archive -Path dist\excel-html-paste-no-helper\* -DestinationPath "dist\excel-html-paste-$version-no-helper.zip" -Force
+          $manifest = Get-Content manifest.json | ConvertFrom-Json
+          $pluginId = $manifest.id
+          $version = $manifest.version
+          Compress-Archive -Path "dist\with-helper\$pluginId" -DestinationPath "dist\$pluginId-$version-with-helper.zip" -Force
+          Compress-Archive -Path "dist\no-helper\$pluginId" -DestinationPath "dist\$pluginId-$version-no-helper.zip" -Force
           Copy-Item manifest.json "dist\manifest.json"
           Copy-Item main.js "dist\main.js"
           Copy-Item styles.css "dist\styles.css"
+
+      - name: Verify release zip structure
+        shell: pwsh
+        run: |
+          $manifest = Get-Content manifest.json | ConvertFrom-Json
+          $pluginId = $manifest.id
+          $version = $manifest.version
+          $archives = @(
+            "dist\$pluginId-$version-with-helper.zip",
+            "dist\$pluginId-$version-no-helper.zip"
+          )
+          $requiredEntries = @(
+            "$pluginId/manifest.json",
+            "$pluginId/main.js",
+            "$pluginId/styles.css"
+          )
+
+          foreach ($archive in $archives) {
+            $entries = @(tar -tf $archive | ForEach-Object { $_.Replace('\', '/') })
+            $invalidEntries = @($entries | Where-Object { $_ -and -not $_.StartsWith("$pluginId/") })
+            if ($invalidEntries.Count -gt 0) {
+              throw "$archive contains entries outside $pluginId/: $($invalidEntries -join ', ')"
+            }
+            foreach ($requiredEntry in $requiredEntries) {
+              if ($entries -notcontains $requiredEntry) {
+                throw "$archive is missing $requiredEntry"
+              }
+            }
+          }
 
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
         with:
           name: excel-html-paste-plugin
           path: |
-            dist/excel-html-paste
-            dist/excel-html-paste-no-helper
+            dist/with-helper/excel-html-paste
+            dist/no-helper/excel-html-paste
             dist/*.zip
             dist/manifest.json
             dist/main.js

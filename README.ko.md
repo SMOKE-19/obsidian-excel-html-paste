@@ -148,7 +148,7 @@ bin/excel-html-clipboard-win32-arm64.exe
 
 ## 설치 방법
 
-GitHub Actions 또는 Release artifact에서 `excel-html-paste-plugin`을 내려받습니다. 압축을 풀면 다음 구조의 폴더가 들어 있습니다.
+GitHub Actions 또는 Release에서 ZIP을 내려받습니다. helper 포함·미포함 ZIP 모두 압축을 풀면 `manifest.json`의 `id`와 같은 이름의 폴더가 들어 있습니다.
 
 ```text
 excel-html-paste/
@@ -172,7 +172,7 @@ excel-html-paste/
 
 파일을 배치한 뒤 Obsidian에서 커뮤니티 플러그인 목록을 새로고침하고 `Excel HTML Paste`를 활성화합니다.
 
-Release에는 zip 패키지와 Obsidian 커뮤니티 플러그인 등록 호환을 위한 `manifest.json`, `main.js`, `styles.css` 개별 파일이 함께 올라갑니다. `v1.1.3` 같은 버전 태그를 push하면 GitHub Actions가 Release asset을 첨부합니다. 수동 설치할 때는 plugin artifact를 받는 쪽이 편합니다.
+Release에는 ZIP 패키지와 Obsidian 커뮤니티 플러그인 등록 호환을 위한 `manifest.json`, `main.js`, `styles.css` 개별 파일이 함께 올라갑니다. ZIP 내부의 `excel-html-paste/` 폴더를 `.obsidian/plugins/`에 그대로 복사하면 됩니다. `v1.1.3` 같은 버전 태그를 push하면 GitHub Actions가 Release asset을 첨부합니다.
 
 Windows native clipboard helper는 선택 구성입니다. 기본 설치와 기본 붙여넣기 동작에는 helper 실행 파일이 필요하지 않습니다. Windows에서 Excel의 CF_HTML 클립보드를 더 안정적으로 읽고 쓰고 싶을 때 helper 실행 파일을 배치합니다.
 

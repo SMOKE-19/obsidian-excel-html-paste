@@ -148,7 +148,7 @@ bin/excel-html-clipboard-win32-arm64.exe
 
 ## Installation
 
-Download the `excel-html-paste-plugin` artifact from GitHub Actions or Releases. After extracting it, the folder should look like this:
+Download a ZIP from GitHub Actions or Releases. Both the helper and no-helper ZIPs contain a top-level folder whose name matches `manifest.json.id`:
 
 ```text
 excel-html-paste/
@@ -172,7 +172,7 @@ Place the extracted `excel-html-paste/` folder under your vault plugin directory
 
 After placing the files, refresh the Community Plugins list in Obsidian and enable `Excel HTML Paste`.
 
-Releases include zip packages and individual `manifest.json`, `main.js`, and `styles.css` files for Obsidian community plugin compatibility. Push a version tag such as `v1.1.3` to have GitHub Actions attach the release assets. For manual installation, the plugin artifact is usually easier to use.
+Releases include ZIP packages and individual `manifest.json`, `main.js`, and `styles.css` files for Obsidian community plugin compatibility. Copy the ZIP's `excel-html-paste/` folder directly into `.obsidian/plugins/`. Push a version tag such as `v1.1.3` to have GitHub Actions attach the release assets.
 
 The Windows native clipboard helper is optional. The basic installation and paste workflow do not require the helper executable. Add the helper when you want more reliable Excel CF_HTML clipboard read/write behavior on Windows.
 
