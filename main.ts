@@ -765,6 +765,10 @@ export default class ExcelHtmlPastePlugin extends Plugin {
 
   private async resolveAssetRoot(sourcePath: string | null): Promise<string> {
     if (typeof this.app.fileManager.getAvailablePathForAttachment !== "function") {
+      console.warn(
+        "[Excel HTML Paste] Attachment path API is unavailable; using the legacy asset root.",
+        { sourcePath, assetRoot: ASSET_ROOT }
+      );
       return ASSET_ROOT;
     }
 
@@ -775,19 +779,35 @@ export default class ExcelHtmlPastePlugin extends Plugin {
         sourcePath ?? undefined
       );
       const separatorIndex = attachmentPath.lastIndexOf("/");
+      const attachmentFolder = separatorIndex >= 0
+        ? normalizePath(attachmentPath.slice(0, separatorIndex))
+        : "";
 
-      if (separatorIndex <= 0) {
+      if (attachmentFolder.split("/").includes("..")) {
+        console.warn(
+          "[Excel HTML Paste] Obsidian returned an unsafe attachment path; using the legacy asset root.",
+          { sourcePath, attachmentPath, assetRoot: ASSET_ROOT }
+        );
         return ASSET_ROOT;
       }
 
-      const attachmentFolder = normalizePath(attachmentPath.slice(0, separatorIndex));
-      if (!attachmentFolder || attachmentFolder.split("/").includes("..")) {
-        return ASSET_ROOT;
-      }
+      const assetRoot = attachmentFolder
+        ? normalizePath(`${attachmentFolder}/excel-paste`)
+        : "excel-paste";
 
-      return normalizePath(`${attachmentFolder}/excel-paste`);
+      console.info("[Excel HTML Paste] Resolved attachment path.", {
+        sourcePath,
+        attachmentPath,
+        attachmentFolder: attachmentFolder || "/",
+        assetRoot
+      });
+
+      return assetRoot;
     } catch (error) {
-      console.warn("Could not resolve the configured Obsidian attachment folder; using the legacy asset root.", error);
+      console.warn(
+        "[Excel HTML Paste] Could not resolve the configured Obsidian attachment folder; using the legacy asset root.",
+        { sourcePath, assetRoot: ASSET_ROOT, error }
+      );
       return ASSET_ROOT;
     }
   }

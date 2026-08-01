@@ -124,6 +124,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          draft: ${{ contains(github.ref_name, '-probe.') }}
+          prerelease: ${{ contains(github.ref_name, '-probe.') }}
           files: |
             dist/*.zip
             dist/manifest.json
