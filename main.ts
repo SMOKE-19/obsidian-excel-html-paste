@@ -303,14 +303,17 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       await this.app.vault.adapter.mkdir(basePath);
 
       if (payload.imageBuffer && imagePath) {
-        await this.app.vault.createBinary(imagePath, payload.imageBuffer);
+        await this.createAssetBinary(imagePath, payload.imageBuffer);
         createdPaths.push(imagePath);
       }
 
-      await this.app.vault.create(htmlPath, payload.html);
+      await this.createAssetText(htmlPath, payload.html);
       createdPaths.push(htmlPath);
 
-      await this.app.vault.create(searchPath, this.htmlToSearchMarkdown(payload.html, sourcePath));
+      await this.createAssetText(
+        searchPath,
+        this.htmlToSearchMarkdown(payload.html, sourcePath)
+      );
       createdPaths.push(searchPath);
 
       const meta: ExcelAssetMeta = {
@@ -322,7 +325,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
         createdAt: new Date().toISOString()
       };
 
-      await this.app.vault.create(metaPath, `${JSON.stringify(meta, null, 2)}\n`);
+      await this.createAssetText(metaPath, `${JSON.stringify(meta, null, 2)}\n`);
       createdPaths.push(metaPath);
 
       return {
@@ -338,17 +341,38 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     }
   }
 
+  private async createAssetText(path: string, content: string): Promise<void> {
+    if (this.isHiddenVaultPath(path)) {
+      await this.app.vault.adapter.write(path, content);
+      return;
+    }
+
+    await this.app.vault.create(path, content);
+  }
+
+  private async createAssetBinary(path: string, content: ArrayBuffer): Promise<void> {
+    if (this.isHiddenVaultPath(path)) {
+      await this.app.vault.adapter.writeBinary(path, content);
+      return;
+    }
+
+    await this.app.vault.createBinary(path, content);
+  }
+
+  private isHiddenVaultPath(path: string): boolean {
+    return normalizePath(path)
+      .split("/")
+      .some((part) => part.startsWith(".") && part !== "." && part !== "..");
+  }
+
   private async rollbackCreatedFiles(paths: string[]): Promise<void> {
     let failed = false;
 
     for (const path of [...paths].reverse()) {
-      const file = this.app.vault.getAbstractFileByPath(path);
-      if (!(file instanceof TFile)) {
-        continue;
-      }
-
       try {
-        await this.app.vault.delete(file);
+        if (await this.app.vault.adapter.exists(path)) {
+          await this.app.vault.adapter.remove(path);
+        }
       } catch (error) {
         failed = true;
         console.error(`Failed to rollback ${path}`, error);
@@ -384,15 +408,14 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       return;
     }
 
-    const metaFile = this.getFile(metaPath);
-    if (!metaFile) {
+    if (!(await this.app.vault.adapter.exists(metaPath))) {
       this.renderError(el, `${this.t("missingMeta")}: ${metaPath}`);
       return;
     }
 
     let meta: ExcelAssetMeta;
     try {
-      meta = this.validateMeta(JSON.parse(await this.app.vault.read(metaFile)));
+      meta = this.validateMeta(JSON.parse(await this.app.vault.adapter.read(metaPath)));
     } catch (error) {
       this.renderError(el, `${this.t("readMetaFailed")}: ${this.errorMessage(error)}`);
       return;
@@ -400,8 +423,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
 
     const basePath = metaPath.substring(0, metaPath.lastIndexOf("/"));
     const htmlPath = `${basePath}/${meta.html}`;
-    const htmlFile = this.getFile(htmlPath);
-    if (!htmlFile) {
+    if (!(await this.app.vault.adapter.exists(htmlPath))) {
       this.renderError(el, `${this.t("missingHtmlAsset")}: ${htmlPath}`);
       return;
     }
@@ -418,13 +440,12 @@ export default class ExcelHtmlPastePlugin extends Plugin {
 
     if (meta.image) {
       const imagePath = `${basePath}/${meta.image}`;
-      const imageFile = this.getFile(imagePath);
 
-      if (imageFile) {
+      if (await this.app.vault.adapter.exists(imagePath)) {
         const image = wrapper.createEl("img", {
           cls: "excel-html-image",
           attr: {
-            src: this.buildResourcePath(imageFile, meta.createdAt),
+            src: this.buildResourcePath(imagePath, meta.createdAt),
             alt: "Excel HTML paste preview"
           }
         });
@@ -453,7 +474,7 @@ export default class ExcelHtmlPastePlugin extends Plugin {
 
     button.addEventListener("click", async () => {
       try {
-        const html = await this.app.vault.read(htmlFile);
+        const html = await this.app.vault.adapter.read(htmlPath);
         await this.writeHtmlToClipboard(html);
         new Notice(this.t("copyHtmlSuccess"));
       } catch (error) {
@@ -787,13 +808,6 @@ export default class ExcelHtmlPastePlugin extends Plugin {
         ? normalizePath(`${attachmentFolder}/excel-paste`)
         : "excel-paste";
 
-      console.info("[Excel HTML Paste] Resolved attachment folder setting.", {
-        sourcePath,
-        attachmentFolderPath,
-        attachmentFolder: attachmentFolder || "/",
-        assetRoot
-      });
-
       return assetRoot;
     } catch (error) {
       console.warn(
@@ -867,8 +881,8 @@ export default class ExcelHtmlPastePlugin extends Plugin {
     return normalizePath(configuredPath.replace(/^\/+/, ""));
   }
 
-  private buildResourcePath(file: TFile, version: string): string {
-    const resourcePath = this.app.vault.getResourcePath(file);
+  private buildResourcePath(path: string, version: string): string {
+    const resourcePath = this.app.vault.adapter.getResourcePath(path);
     const separator = resourcePath.includes("?") ? "&" : "?";
     return `${resourcePath}${separator}v=${encodeURIComponent(version)}`;
   }

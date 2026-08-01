@@ -204,6 +204,5 @@ The `excel-html-paste-plugin` artifact produced by GitHub Actions includes the W
 - If the clipboard does not contain `text/html`, paste is aborted.
 - If the clipboard does not contain an image, only the HTML source and searchable Markdown index are stored.
 - Generated assets are stored under `excel-paste/` in the folder resolved from Obsidian's `attachmentFolderPath` setting. `/` means the Vault root, `./` means the current note's folder, and `./attachments` means an `attachments` folder below the current note's folder. The legacy `assets/excel-paste/` path is used only when the setting cannot be read or is unsafe.
-- To inspect the runtime decision, open Developer Tools and filter the Console for `Excel HTML Paste`; the log includes `attachmentFolderPath`, `attachmentFolder`, and `assetRoot`.
-- Dot-prefixed folders such as `.assets` can store the files but may be excluded from Obsidian's search index.
+- Dot-prefixed hidden folders such as `.assets` support storage, rendering, HTML copy, replacement, and deletion. The plugin accesses files in these paths directly through the Adapter API, but Obsidian may exclude them from its search index.
 - `table.search.md` is a sidecar Markdown file that converts HTML table content into Markdown table text so Obsidian search can index it.

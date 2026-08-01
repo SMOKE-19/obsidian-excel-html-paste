@@ -204,6 +204,5 @@ GitHub Actions로 배포되는 `excel-html-paste-plugin` artifact에는 Windows 
 - 클립보드에 `text/html`이 없으면 붙여넣기를 중단합니다.
 - 클립보드에 이미지가 없으면 HTML 원본과 검색용 Markdown만 저장합니다.
 - 생성되는 asset은 Obsidian의 `attachmentFolderPath` 설정을 해석한 폴더의 `excel-paste/` 아래에 저장됩니다. `/`는 Vault 루트, `./`는 현재 문서 폴더, `./attachments`는 현재 문서 폴더 아래의 `attachments`를 뜻합니다. 설정을 읽을 수 없거나 경로가 안전하지 않은 경우에만 기존 `assets/excel-paste/`로 폴백합니다.
-- 실제 계산 결과는 개발자 도구 Console에서 `Excel HTML Paste`로 필터링해 `attachmentFolderPath`, `attachmentFolder`, `assetRoot` 값을 확인할 수 있습니다.
-- `.assets`처럼 점으로 시작하는 폴더는 저장 위치로 사용할 수 있지만 Obsidian 검색 인덱스에서는 제외될 수 있습니다.
+- `.assets`처럼 점으로 시작하는 숨김 폴더도 저장, 렌더링, HTML 복사, 교체, 삭제에 사용할 수 있습니다. 플러그인은 이 경로의 파일을 Adapter API로 직접 처리하지만, Obsidian 검색 인덱스에서는 제외될 수 있습니다.
 - `table.search.md`는 Obsidian 검색에 걸리도록 HTML table 내용을 Markdown table 형태로 변환한 보조 파일입니다.
