@@ -52,6 +52,10 @@ interface ArchivedAssetFile {
   archivedPath: string;
 }
 
+interface VaultConfigAccess {
+  getConfig?: (key: string) => unknown;
+}
+
 type ReplacementMode = "archive" | "overwrite";
 type Locale = "en" | "ko";
 
@@ -764,40 +768,28 @@ export default class ExcelHtmlPastePlugin extends Plugin {
   }
 
   private async resolveAssetRoot(sourcePath: string | null): Promise<string> {
-    if (typeof this.app.fileManager.getAvailablePathForAttachment !== "function") {
-      console.warn(
-        "[Excel HTML Paste] Attachment path API is unavailable; using the legacy asset root.",
-        { sourcePath, assetRoot: ASSET_ROOT }
-      );
-      return ASSET_ROOT;
-    }
-
     try {
-      const probeName = `.excel-html-paste-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.tmp`;
-      const attachmentPath = await this.app.fileManager.getAvailablePathForAttachment(
-        probeName,
-        sourcePath ?? undefined
-      );
-      const separatorIndex = attachmentPath.lastIndexOf("/");
-      const attachmentFolder = separatorIndex >= 0
-        ? normalizePath(attachmentPath.slice(0, separatorIndex))
-        : "";
-
-      if (attachmentFolder.split("/").includes("..")) {
+      const attachmentFolderPath = await this.readAttachmentFolderPath();
+      if (attachmentFolderPath === null) {
         console.warn(
-          "[Excel HTML Paste] Obsidian returned an unsafe attachment path; using the legacy asset root.",
-          { sourcePath, attachmentPath, assetRoot: ASSET_ROOT }
+          "[Excel HTML Paste] Could not read the configured Obsidian attachment folder; using the legacy asset root.",
+          { sourcePath, assetRoot: ASSET_ROOT }
         );
         return ASSET_ROOT;
       }
+
+      const attachmentFolder = this.resolveAttachmentFolder(
+        attachmentFolderPath,
+        sourcePath
+      );
 
       const assetRoot = attachmentFolder
         ? normalizePath(`${attachmentFolder}/excel-paste`)
         : "excel-paste";
 
-      console.info("[Excel HTML Paste] Resolved attachment path.", {
+      console.info("[Excel HTML Paste] Resolved attachment folder setting.", {
         sourcePath,
-        attachmentPath,
+        attachmentFolderPath,
         attachmentFolder: attachmentFolder || "/",
         assetRoot
       });
@@ -810,6 +802,69 @@ export default class ExcelHtmlPastePlugin extends Plugin {
       );
       return ASSET_ROOT;
     }
+  }
+
+  private async readAttachmentFolderPath(): Promise<string | null> {
+    const vault = this.app.vault as typeof this.app.vault & VaultConfigAccess;
+    if (typeof vault.getConfig === "function") {
+      const runtimeValue = vault.getConfig("attachmentFolderPath");
+      if (typeof runtimeValue === "string") {
+        return runtimeValue;
+      }
+    }
+
+    try {
+      const configPath = normalizePath(`${this.app.vault.configDir}/app.json`);
+      const rawConfig = await this.app.vault.adapter.read(configPath);
+      const config = JSON.parse(rawConfig) as Record<string, unknown>;
+      if (!("attachmentFolderPath" in config)) {
+        return "";
+      }
+
+      return typeof config.attachmentFolderPath === "string"
+        ? config.attachmentFolderPath
+        : null;
+    } catch (error) {
+      console.warn(
+        "[Excel HTML Paste] Could not read attachmentFolderPath from the Obsidian app configuration.",
+        { configDir: this.app.vault.configDir, error }
+      );
+      return null;
+    }
+  }
+
+  private resolveAttachmentFolder(
+    attachmentFolderPath: string,
+    sourcePath: string | null
+  ): string {
+    const configuredPath = attachmentFolderPath.trim().replace(/\\/g, "/");
+    const configuredParts = configuredPath.split("/");
+    if (configuredParts.includes("..")) {
+      throw new Error("Unsafe attachment folder path");
+    }
+
+    const normalizedSourcePath = sourcePath ? normalizePath(sourcePath) : "";
+    const sourceSeparatorIndex = normalizedSourcePath.lastIndexOf("/");
+    const sourceFolder = sourceSeparatorIndex >= 0
+      ? normalizedSourcePath.slice(0, sourceSeparatorIndex)
+      : "";
+
+    if (configuredPath === "" || configuredPath === "/") {
+      return "";
+    }
+
+    if (configuredPath === "." || configuredPath === "./") {
+      return sourceFolder;
+    }
+
+    if (configuredPath.startsWith("./")) {
+      const relativeFolder = configuredPath.slice(2);
+      return normalizePath(sourceFolder
+        ? `${sourceFolder}/${relativeFolder}`
+        : relativeFolder);
+    }
+
+    return normalizePath(configuredPath.replace(/^\/+/, ""));
   }
 
   private buildResourcePath(file: TFile, version: string): string {
