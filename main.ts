@@ -998,7 +998,8 @@ export default class ExcelHtmlPastePlugin extends Plugin {
         reject(new Error("Native clipboard helper timed out."));
       }, 10000);
 
-      child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk.toString("utf8")));
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (chunk: string) => stdout.push(chunk));
       child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk.toString("utf8")));
       child.on("error", (error) => {
         window.clearTimeout(timer);
@@ -1055,11 +1056,17 @@ ${body}
 
     const start = Number(startMatch[1]);
     const end = Number(endMatch[1]);
-    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) {
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || end <= start) {
       return null;
     }
 
-    return html.slice(start, end);
+    // CF_HTML offsets count UTF-8 bytes, including those in SourceURL.
+    const bytes = Buffer.from(html, "utf8");
+    if (end > bytes.length) {
+      return null;
+    }
+
+    return bytes.toString("utf8", start, end);
   }
 
   private htmlToSearchMarkdown(html: string, sourcePath: string | null): string {
