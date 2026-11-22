@@ -74,6 +74,8 @@ In short, the helper is an optional component for improving **Windows Excel form
 
 ## Usage Flow
 
+![Windows demo showing a formatted Excel table pasted into Obsidian and copied back to Excel](docs/media/excel-round-trip.gif)
+
 Copy a range in Excel with **Ctrl+C**, right-click in the Obsidian editor, and choose `Paste Excel table (HTML)`. Wait for the asset to appear in the note before switching views.
 
 When Obsidian's **Files and links → Default location for new attachments** is configured, the plugin creates its asset folder under that location and inserts a code block into the current note. If no attachment folder is configured or the path cannot be resolved, it uses the legacy default path.
@@ -98,7 +100,7 @@ path: assets/excel-paste/{id}/meta.json
 
 Switch to **Reading view** to see the table preview. Click **HTML** on the preview, return to Excel, select a destination cell, and paste with **Ctrl+V**. If Excel supplies no clipboard image, Obsidian shows an HTML-only fallback with the same **HTML** copy button.
 
-When you paste the table back into Excel, the destination sheet's column widths and row heights can affect how it looks.
+The Windows demo uses the `with-helper` ZIP. The merged header, fill colors, borders, and number formats survive the round trip. The demo pastes into a sheet with the original column widths and row heights. A blank sheet can make the same pasted cells appear narrower or shorter because Excel uses the destination sheet's dimensions.
 
 ## Asset Management
 
