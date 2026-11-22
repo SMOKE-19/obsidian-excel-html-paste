@@ -4,6 +4,12 @@
 
 Excel HTML Paste is an Obsidian plugin that stores tables copied from Excel as managed assets in your vault. It reads `text/html` and `image/png` from the clipboard, saves them under the vault, and inserts a code block that points to the managed asset.
 
+## Quick Start
+
+- On Windows x64, choose the `with-helper` ZIP for more reliable Excel formatting when copying a table back to Excel. Choose `no-helper` to use the basic workflow without the helper executable. [Download from Releases](https://github.com/SMOKE-19/obsidian-excel-html-paste/releases/latest)
+- The optional helper's Rust source and GitHub Actions build are published in this repository. [Helper source](helper/src/main.rs) · [Build workflow](.github/workflows/build-plugin.yml) · [Build it yourself](helper/README.md)
+- Follow [Windows installation](#installation), then try the [Excel → Obsidian → Excel workflow](#usage-flow).
+
 ## Features
 
 - Adds an editor context-menu command: `Paste Excel table (HTML)`
@@ -68,7 +74,9 @@ In short, the helper is an optional component for improving **Windows Excel form
 
 ## Usage Flow
 
-Copy a table from Excel, right-click in the Obsidian editor, and choose `Paste Excel table (HTML)`.
+![Windows demo showing a formatted Excel table pasted into Obsidian and copied back to Excel](docs/media/excel-round-trip.gif)
+
+Copy a range in Excel with **Ctrl+C**, right-click in the Obsidian editor, and choose `Paste Excel table (HTML)`. Wait for the asset to appear in the note before switching views.
 
 When Obsidian's **Files and links → Default location for new attachments** is configured, the plugin creates its asset folder under that location and inserts a code block into the current note. If no attachment folder is configured or the path cannot be resolved, it uses the legacy default path.
 
@@ -90,7 +98,9 @@ path: assets/excel-paste/{id}/meta.json
 ```
 ````
 
-In Reading view, this code block is rendered as an Excel table image preview. If no image exists, the renderer shows an HTML-only fallback message.
+Switch to **Reading view** to see the table preview. Click **HTML** on the preview, return to Excel, select a destination cell, and paste with **Ctrl+V**. If Excel supplies no clipboard image, Obsidian shows an HTML-only fallback with the same **HTML** copy button.
+
+The Windows demo uses the `with-helper` ZIP. The sample's merged header, fill colors, and borders are visible after pasting back into Excel. The destination column widths can differ. To fit them to the text, select the pasted columns and double-click a column heading boundary.
 
 ## Asset Management
 
@@ -148,18 +158,14 @@ bin/excel-html-clipboard-win32-arm64.exe
 
 ## Installation
 
-Download a ZIP from GitHub Actions or Releases. Both the helper and no-helper ZIPs contain a top-level folder whose name matches `manifest.json.id`:
+![Windows demo showing Obsidian setup, ZIP extraction, and manual plugin activation](docs/media/windows-install.gif)
 
-```text
-excel-html-paste/
-  manifest.json
-  main.js
-  styles.css
-  bin/
-    excel-html-clipboard-win32-x64.exe
-```
+1. Download the Windows installer, run it, and open or create a local vault in Obsidian. [Obsidian downloads](https://obsidian.md/download)
+2. Download a plugin ZIP and use **Extract All** in File Explorer. [Excel HTML Paste Releases](https://github.com/SMOKE-19/obsidian-excel-html-paste/releases/latest)
+3. Copy the extracted `excel-html-paste` folder into your vault's `.obsidian/plugins/` directory. Create `plugins` if needed.
+4. In Obsidian, open **Settings → Community plugins**, turn on community plugins if prompted, and enable **Excel HTML Paste** under **Installed plugins**. Refresh the list if the plugin does not appear.
 
-Place the extracted `excel-html-paste/` folder under your vault plugin directory.
+The `with-helper` ZIP produces this layout.
 
 ```text
 .obsidian/plugins/excel-html-paste/
@@ -170,32 +176,7 @@ Place the extracted `excel-html-paste/` folder under your vault plugin directory
     excel-html-clipboard-win32-x64.exe
 ```
 
-After placing the files, refresh the Community Plugins list in Obsidian and enable `Excel HTML Paste`.
-
-Releases include ZIP packages and individual `manifest.json`, `main.js`, and `styles.css` files for Obsidian community plugin compatibility. Copy the ZIP's `excel-html-paste/` folder directly into `.obsidian/plugins/`. Push a version tag such as `v1.1.3` to have GitHub Actions attach the release assets.
-
-The Windows native clipboard helper is optional. The basic installation and paste workflow do not require the helper executable. Add the helper when you want more reliable Excel CF_HTML clipboard read/write behavior on Windows.
-
-```text
-excel-html-paste/
-  bin/
-    excel-html-clipboard-win32-x64.exe
-```
-
-Inside a vault, that becomes:
-
-```text
-.obsidian/plugins/excel-html-paste/
-  manifest.json
-  main.js
-  styles.css
-  bin/
-    excel-html-clipboard-win32-x64.exe
-```
-
-The repository `bin/` directory contains only a `.gitkeep` placeholder. This is fine for basic installation. Build and place the actual helper executable only when needed.
-
-The `excel-html-paste-plugin` artifact produced by GitHub Actions includes the Windows x64 helper. If you clone the repository and build it yourself, run `npm run build:helper:win64` and copy the resulting executable to `bin/excel-html-clipboard-win32-x64.exe`.
+The `no-helper` ZIP provides the three plugin files. To install a self-built helper, place the executable under `bin/` as shown above. [Build instructions](helper/README.md)
 
 ## Behavior Notes
 

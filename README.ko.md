@@ -4,6 +4,12 @@
 
 Excel에서 복사한 표를 Obsidian 문서에 관리형 asset으로 붙여넣는 Obsidian 플러그인입니다. 클립보드의 `text/html`과 `image/png`를 읽어 vault 안에 저장하고, 문서에는 asset을 가리키는 코드블럭을 삽입합니다.
 
+## 빠른 시작
+
+- Windows x64에서 표를 Excel로 다시 붙여넣을 때 서식을 더 안정적으로 유지하려면 `with-helper` ZIP을 선택하세요. 실행 파일 없이 기본 기능을 사용하려면 `no-helper` ZIP을 선택하세요. [GitHub Releases에서 내려받기](https://github.com/SMOKE-19/obsidian-excel-html-paste/releases/latest)
+- 선택 구성인 helper의 Rust 소스와 GitHub Actions 빌드 설정은 이 저장소에 공개되어 있습니다. [Helper 소스](helper/src/main.rs) · [빌드 워크플로](.github/workflows/build-plugin.yml) · [직접 빌드](helper/README.md)
+- [Windows 설치 방법](#설치-방법)을 따라 설치한 뒤 [Excel → Obsidian → Excel 사용 흐름](#사용-흐름)을 따라 해 보세요.
+
 ## 주요 기능
 
 - 편집기 우클릭 메뉴의 `Excel 표(HTML) 붙여넣기` 명령 제공
@@ -68,7 +74,9 @@ helper는 작은 Rust native 실행 파일입니다. Windows의 `HTML Format` �
 
 ## 사용 흐름
 
-Excel에서 표를 복사한 뒤 Obsidian 편집기에서 우클릭하고 `Excel 표(HTML) 붙여넣기`를 선택합니다.
+![Excel에서 복사한 서식 있는 표를 Obsidian에 넣고 다시 Excel로 붙여넣는 Windows 시연](docs/media/excel-round-trip.gif)
+
+Excel에서 표 범위를 선택하고 **Ctrl+C**로 복사한 뒤 Obsidian 편집기에서 우클릭하고 `Excel 표(HTML) 붙여넣기`를 선택합니다. 노트에 표가 나타난 뒤 보기 모드를 전환합니다.
 
 플러그인은 Obsidian의 `파일 및 링크 → 첨부 파일 폴더 경로`가 설정되어 있으면 해당 폴더 아래에 asset 폴더를 만들고, 현재 문서에는 코드블럭을 삽입합니다. 첨부 파일 폴더가 지정되지 않았거나 경로를 확인할 수 없으면 기존 기본 경로를 사용합니다.
 
@@ -90,7 +98,9 @@ path: assets/excel-paste/{id}/meta.json
 ```
 ````
 
-읽기 모드에서는 이 코드블럭이 Excel 표 이미지로 렌더링됩니다. 이미지가 없는 경우 HTML-only fallback 메시지를 표시합니다.
+**읽기 모드**로 전환하면 표 미리보기가 나타납니다. 미리보기의 **HTML**을 누른 뒤 Excel에서 대상 셀을 선택하고 **Ctrl+V**로 붙여넣습니다. 클립보드에 이미지가 없으면 Obsidian이 HTML만 저장되었다는 안내와 **HTML** 복사 버튼을 표시합니다.
+
+Windows 시연에는 `with-helper` ZIP을 사용했습니다. 예제 표의 병합 제목 셀, 채우기 색상, 테두리는 Excel에 다시 붙여넣은 뒤에도 보입니다. 대상 시트의 열 너비는 원본과 다를 수 있습니다. 붙여넣은 열을 선택한 뒤 열 머리글의 경계를 두 번 클릭하면 내용에 맞게 조정할 수 있습니다.
 
 ## Asset 관리
 
@@ -148,18 +158,14 @@ bin/excel-html-clipboard-win32-arm64.exe
 
 ## 설치 방법
 
-GitHub Actions 또는 Release에서 ZIP을 내려받습니다. helper 포함·미포함 ZIP 모두 압축을 풀면 `manifest.json`의 `id`와 같은 이름의 폴더가 들어 있습니다.
+![Windows에서 Obsidian 설치, ZIP 압축 풀기, 플러그인 수동 활성화를 보여주는 시연](docs/media/windows-install.gif)
 
-```text
-excel-html-paste/
-  manifest.json
-  main.js
-  styles.css
-  bin/
-    excel-html-clipboard-win32-x64.exe
-```
+1. Windows 설치 파일을 내려받아 실행하고, Obsidian에서 로컬 보관함을 열거나 만듭니다. [Obsidian 다운로드](https://obsidian.md/download)
+2. 플러그인 ZIP을 내려받아 파일 탐색기에서 **압축 풀기**를 실행합니다. [Excel HTML Paste Releases](https://github.com/SMOKE-19/obsidian-excel-html-paste/releases/latest)
+3. 압축을 푼 `excel-html-paste` 폴더를 보관함의 `.obsidian/plugins/`에 복사합니다. `plugins` 폴더가 없으면 만듭니다.
+4. Obsidian의 **설정 → 커뮤니티 플러그인**에서 사용을 허용하고, **설치된 플러그인** 목록에서 **Excel HTML Paste**를 켭니다. 목록에 나타나지 않으면 새로고침합니다.
 
-압축을 푼 `excel-html-paste/` 폴더를 vault의 아래 위치에 둡니다.
+`with-helper` ZIP을 설치하면 아래 구조가 됩니다.
 
 ```text
 .obsidian/plugins/excel-html-paste/
@@ -170,32 +176,7 @@ excel-html-paste/
     excel-html-clipboard-win32-x64.exe
 ```
 
-파일을 배치한 뒤 Obsidian에서 커뮤니티 플러그인 목록을 새로고침하고 `Excel HTML Paste`를 활성화합니다.
-
-Release에는 ZIP 패키지와 Obsidian 커뮤니티 플러그인 등록 호환을 위한 `manifest.json`, `main.js`, `styles.css` 개별 파일이 함께 올라갑니다. ZIP 내부의 `excel-html-paste/` 폴더를 `.obsidian/plugins/`에 그대로 복사하면 됩니다. `v1.1.3` 같은 버전 태그를 push하면 GitHub Actions가 Release asset을 첨부합니다.
-
-Windows native clipboard helper는 선택 구성입니다. 기본 설치와 기본 붙여넣기 동작에는 helper 실행 파일이 필요하지 않습니다. Windows에서 Excel의 CF_HTML 클립보드를 더 안정적으로 읽고 쓰고 싶을 때 helper 실행 파일을 배치합니다.
-
-```text
-excel-html-paste/
-  bin/
-    excel-html-clipboard-win32-x64.exe
-```
-
-vault 안에서는 다음 위치가 됩니다.
-
-```text
-.obsidian/plugins/excel-html-paste/
-  manifest.json
-  main.js
-  styles.css
-  bin/
-    excel-html-clipboard-win32-x64.exe
-```
-
-현재 저장소의 `bin/`에는 자리표시자인 `.gitkeep`만 있습니다. 기본 설치에는 문제가 없으며, 실제 helper 실행 파일은 필요한 경우에만 별도로 빌드해서 배치합니다.
-
-GitHub Actions로 배포되는 `excel-html-paste-plugin` artifact에는 Windows x64 helper가 포함됩니다. 저장소를 직접 clone해서 빌드하는 경우에는 `npm run build:helper:win64`로 helper를 만든 뒤 `bin/excel-html-clipboard-win32-x64.exe` 위치에 복사해야 합니다.
+`no-helper` ZIP에는 플러그인 파일 세 개가 들어 있습니다. 직접 빌드한 helper를 사용하려면 위 구조의 `bin/`에 실행 파일을 넣습니다. [Helper 빌드 방법](helper/README.md)
 
 ## 동작 메모
 
