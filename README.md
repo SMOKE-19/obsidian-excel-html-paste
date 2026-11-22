@@ -100,7 +100,7 @@ path: assets/excel-paste/{id}/meta.json
 
 Switch to **Reading view** to see the table preview. Click **HTML** on the preview, return to Excel, select a destination cell, and paste with **Ctrl+V**. If Excel supplies no clipboard image, Obsidian shows an HTML-only fallback with the same **HTML** copy button.
 
-The Windows demo uses the `with-helper` ZIP. The merged header, fill colors, borders, and number formats survive the round trip. The demo pastes into a sheet with the original column widths and row heights. A blank sheet can make the same pasted cells appear narrower or shorter because Excel uses the destination sheet's dimensions.
+The Windows demo uses the `with-helper` ZIP. The sample's merged header, fill colors, and borders are visible after pasting back into Excel. The destination column widths can differ. To fit them to the text, select the pasted columns and double-click a column heading boundary.
 
 ## Asset Management
 
