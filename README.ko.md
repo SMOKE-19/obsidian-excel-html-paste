@@ -158,8 +158,6 @@ bin/excel-html-clipboard-win32-arm64.exe
 
 ## 설치 방법
 
-![Windows에서 Obsidian 설치, ZIP 압축 풀기, 플러그인 수동 활성화를 보여주는 시연](docs/media/windows-install.gif)
-
 1. Windows 설치 파일을 내려받아 실행하고, Obsidian에서 로컬 보관함을 열거나 만듭니다. [Obsidian 다운로드](https://obsidian.md/download)
 2. 플러그인 ZIP을 내려받아 파일 탐색기에서 **압축 풀기**를 실행합니다. [Excel HTML Paste Releases](https://github.com/SMOKE-19/obsidian-excel-html-paste/releases/latest)
 3. 압축을 푼 `excel-html-paste` 폴더를 보관함의 `.obsidian/plugins/`에 복사합니다. `plugins` 폴더가 없으면 만듭니다.

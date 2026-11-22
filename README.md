@@ -158,8 +158,6 @@ bin/excel-html-clipboard-win32-arm64.exe
 
 ## Installation
 
-![Windows demo showing Obsidian setup, ZIP extraction, and manual plugin activation](docs/media/windows-install.gif)
-
 1. Download the Windows installer, run it, and open or create a local vault in Obsidian. [Obsidian downloads](https://obsidian.md/download)
 2. Download a plugin ZIP and use **Extract All** in File Explorer. [Excel HTML Paste Releases](https://github.com/SMOKE-19/obsidian-excel-html-paste/releases/latest)
 3. Copy the extracted `excel-html-paste` folder into your vault's `.obsidian/plugins/` directory. Create `plugins` if needed.
