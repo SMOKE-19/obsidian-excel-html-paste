@@ -74,7 +74,7 @@ helper는 작은 Rust native 실행 파일입니다. Windows의 `HTML Format` �
 
 ## 사용 흐름
 
-![Excel에서 복사한 서식 있는 표를 Obsidian에 넣고 다시 Excel로 붙여넣는 Windows 시연](docs/media/excel-round-trip.gif)
+![Excel에서 복사한 서식 있는 표를 Obsidian에 넣고 다시 Excel로 붙여넣는 Windows 시연](docs/media/excel-round-trip-autofit.gif)
 
 Excel에서 표 범위를 선택하고 **Ctrl+C**로 복사한 뒤 Obsidian 편집기에서 우클릭하고 `Excel 표(HTML) 붙여넣기`를 선택합니다. 노트에 표가 나타난 뒤 보기 모드를 전환합니다.
 
